@@ -1,0 +1,83 @@
+services:
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: ipfs
+    restart: unless-stopped
+    environment:
+      - IPFS_PROFILE=server
+      - IPFS_STORAGE_MAX=${IPFS_STORAGE_MAX:-4TB}
+    ports:
+      - "4001:4001"
+      - "4001:4001/udp"
+      - "127.0.0.1:5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs_data:/data/ipfs
+      - ./container-init.d:/container-init.d:ro
+    healthcheck:
+      test: ["CMD", "ipfs", "id"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  cluster:
+    image: ipfs/ipfs-cluster:latest
+    container_name: cluster
+    restart: unless-stopped
+    depends_on:
+      ipfs:
+        condition: service_healthy
+    environment:
+      - CLUSTER_PEERNAME=${CLUSTER_PEERNAME}
+      - CLUSTER_SECRET=${CLUSTER_SECRET}
+      - CLUSTER_IPFSHTTP_NODEMULTIADDRESS=/dns4/ipfs/tcp/5001
+      # Only the coordinator may modify the pinset. Volunteer peers join
+      # and automatically receive content allocations, but cannot add/remove pins.
+      - CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID:-*}
+      - COORDINATOR_PEER_ID=${COORDINATOR_PEER_ID:-}
+      - CLUSTER_MONITORPINGINTERVAL=15s
+      - BOOTSTRAP_PEERS=${BOOTSTRAP_PEERS:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        # Ensure writable for the ipfs user before init
+        chown -R ipfs /data/ipfs-cluster
+        if [ ! -f /data/ipfs-cluster/service.json ]; then
+          echo "Initializing ipfs-cluster configuration..."
+          su-exec ipfs ipfs-cluster-service init --consensus "${IPFS_CLUSTER_CONSENSUS:-crdt}"
+        fi
+        # service.json is guaranteed to exist here, so the patch always fires
+        /opt/patch-cluster-config.sh
+        chown ipfs /data/ipfs-cluster/service.json
+        exec /sbin/tini -- /usr/local/bin/entrypoint.sh daemon
+    ports:
+      - "9096:9096"
+    volumes:
+      - cluster_data:/data/ipfs-cluster
+      - ./scripts/patch-cluster-config.sh:/opt/patch-cluster-config.sh:ro
+    networks:
+      - default
+      - cluster-internal:
+          aliases:
+            # Stable DNS name for the REST API, independent of container_name.
+            # Coolify may rename containers; the dashboard always reaches
+            # http://cluster:9094 via this alias.
+            - cluster
+    healthcheck:
+      test: ["CMD", "ipfs-cluster-ctl", "id"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  ipfs_data:
+    driver: local
+  cluster_data:
+    driver: local
+
+networks:
+  cluster-internal:
+    external: true

@@ -1,0 +1,15 @@
+# Secrets — NEVER commit the real .env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
