@@ -58,13 +58,10 @@ services:
       - cluster_data:/data/ipfs-cluster
       - ./scripts/patch-cluster-config.sh:/opt/patch-cluster-config.sh:ro
     networks:
-      - default
-      - cluster-internal:
-          aliases:
-            # Stable DNS name for the REST API, independent of container_name.
-            # Coolify may rename containers; the dashboard always reaches
-            # http://cluster:9094 via this alias.
-            - cluster
+      default: {}
+      cluster-internal:
+        aliases:
+          - cluster
     healthcheck:
       test: ["CMD", "ipfs-cluster-ctl", "id"]
       interval: 30s
