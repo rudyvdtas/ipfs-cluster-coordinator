@@ -5,7 +5,11 @@ cluster en host je automatisch een deel van de geselecteerde content.
 
 ## Wat je nodig hebt
 
-- Een Linux-server (VPS) met minimaal 2GB RAM en 50GB+ vrije schijfruimte
+- Een Linux-machine (VPS, Raspberry Pi 3/4/5, oude laptop — ARM64 of AMD64)
+  `ipfs/kubo` en `ipfs/ipfs-cluster` zijn **multi-arch** images, Docker trekt
+  automatisch de juiste versie voor jouw architectuur.
+- **Minimaal 1.5–2GB RAM** (Kubo + Cluster samen verbruiken ~500MB–1GB idle)
+- **Zoveel vrije schijfruimte als je wilt bijdragen**, stel je in via `IPFS_STORAGE_MAX`
 - Docker geïnstalleerd (`curl -fsSL https://get.docker.com | sh`)
 - Het cluster-secret (deel ik privé)
 
@@ -24,7 +28,8 @@ Vul in `.env` in:
 CLUSTER_SECRET=<jouw-secret>
 CLUSTER_PEERNAME=kies-een-unieke-naam
 COORDINATOR_PEER_ID=12D3KooWSwQrE3YTewpixUEYxLBd6pBQCDyDposciqtXNHPTaTsz
-IPFS_STORAGE_MAX=60GB
+# Zoveel GB als je wilt bijdragen, bijv. 50GB, 200GB, 400GB — of leeg voor 4TB default
+IPFS_STORAGE_MAX=200GB
 BOOTSTRAP_PEERS=/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWSwQrE3YTewpixUEYxLBd6pBQCDyDposciqtXNHPTaTsz
 ```
 
