@@ -34,7 +34,7 @@ services:
       - CLUSTER_IPFSHTTP_NODEMULTIADDRESS=/dns4/ipfs/tcp/5001
       # Only the coordinator may modify the pinset. Volunteer peers join
       # and automatically receive content allocations, but cannot add/remove pins.
-      - CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID:-*}
+      - CLUSTER_CRDT_TRUSTEDPEERS=*
       - COORDINATOR_PEER_ID=${COORDINATOR_PEER_ID:-}
       - TRUSTED_PEERS=${TRUSTED_PEERS:-}
       - CLUSTER_MONITORPINGINTERVAL=15s
