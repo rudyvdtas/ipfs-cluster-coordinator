@@ -38,6 +38,7 @@ services:
       - COORDINATOR_PEER_ID=${COORDINATOR_PEER_ID:-}
       - TRUSTED_PEERS=${TRUSTED_PEERS:-}
       - CLUSTER_MONITORPINGINTERVAL=15s
+      - CLUSTER_PEER_ADDRESSES=${CLUSTER_PEER_ADDRESSES:-}
       - BOOTSTRAP_PEERS=${BOOTSTRAP_PEERS:-}
     entrypoint: ["/bin/sh", "-c"]
     command:

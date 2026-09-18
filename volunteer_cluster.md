@@ -53,9 +53,12 @@ Fill in the following fields:
 ```
 CLUSTER_SECRET=<the secret I will share with you privately>
 CLUSTER_PEERNAME=choose-a-unique-name         # e.g. "jan-vps" — for identification only
-COORDINATOR_PEER_ID=12D3KooWSwQrE3YTewpixUEYxLBd6pBQCDyDposciqtXNHPTaTsz
+COORDINATOR_PEER_ID=12D3KooWHFTWFc97iyXyPEPX1Rxs1AaUxk2a6rDdkRQBUfybsfok
 IPFS_STORAGE_MAX=200GB                         # how much you want to contribute; leave empty for 4TB default
-BOOTSTRAP_PEERS=/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWSwQrE3YTewpixUEYxLBd6pBQCDyDposciqtXNHPTaTsz
+BOOTSTRAP_PEERS=/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWHFTWFc97iyXyPEPX1Rxs1AaUxk2a6rDdkRQBUfybsfok
+# Only needed if you are behind NAT (home network, Docker Desktop, etc.).
+# Set this to your public IP or Tailscale IP so the coordinator can reach you back.
+# CLUSTER_PEER_ADDRESSES=/ip4/<your-public-or-tailscale-ip>/tcp/9096
 ```
 
 Save and exit (in nano: `Ctrl+O`, `Enter`, `Ctrl+X`).
@@ -70,6 +73,17 @@ sudo ufw allow 4001/udp
 This is the port your node uses to communicate with other peers.
 Do not skip this step — without an open port your node cannot connect
 to the cluster.
+
+**Also open port 9096/tcp** if you are behind NAT (home router, Docker on macOS, etc.):
+
+```bash
+sudo ufw allow 9096/tcp
+```
+
+Then tell your router to forward port 9096 to this machine. Without this,
+the coordinator cannot reach back to your peer for CRDT sync and metrics.
+If your machine has a public IP, also set `CLUSTER_PEER_ADDRESSES` in `.env`
+(see step 3).
 
 ### 5. Create the Docker network and start
 
