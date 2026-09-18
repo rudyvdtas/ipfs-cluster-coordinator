@@ -55,6 +55,11 @@ services:
     volumes:
       - cluster_data:/data/ipfs-cluster
       - ./scripts/patch-cluster-config.sh:/opt/patch-cluster-config.sh:ro
+    networks:
+      default: {}
+      cluster-internal:
+        aliases:
+          - cluster
     healthcheck:
       test: ["CMD", "ipfs-cluster-ctl", "id"]
       interval: 30s
@@ -62,26 +67,12 @@ services:
       retries: 5
       start_period: 30s
 
-  dashboard:
-    build:
-      context: ./dashboard
-    container_name: cluster-dashboard
-    restart: unless-stopped
-    environment:
-      - HOST=0.0.0.0
-      - PORT=3000
-      - CLUSTER_API_URL=http://cluster:9094
-    ports:
-      - "3000:3000"
-    depends_on:
-      - cluster
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ipfs-dashboard.rule=Host(`${DOMAIN:-dashboard.localhost}`)"
-      - "traefik.http.services.ipfs-dashboard.loadbalancer.server.port=3000"
-
 volumes:
   ipfs_data:
     driver: local
   cluster_data:
     driver: local
+
+networks:
+  cluster-internal:
+    external: true
