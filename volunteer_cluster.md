@@ -53,9 +53,9 @@ Fill in the following fields:
 ```
 CLUSTER_SECRET=<the secret I will share with you privately>
 CLUSTER_PEERNAME=choose-a-unique-name         # e.g. "jan-vps" — for identification only
-COORDINATOR_PEER_ID=12D3KooWHFTWFc97iyXyPEPX1Rxs1AaUxk2a6rDdkRQBUfybsfok
+COORDINATOR_PEER_ID=12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd
 IPFS_STORAGE_MAX=200GB                         # how much you want to contribute; leave empty for 4TB default
-BOOTSTRAP_PEERS=/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWHFTWFc97iyXyPEPX1Rxs1AaUxk2a6rDdkRQBUfybsfok
+BOOTSTRAP_PEERS=/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd
 # Only needed if you are behind NAT (home network, Docker Desktop, etc.).
 # Set this to your public IP or Tailscale IP so the coordinator can reach you back.
 # CLUSTER_PEER_ADDRESSES=/ip4/<your-public-or-tailscale-ip>/tcp/9096
