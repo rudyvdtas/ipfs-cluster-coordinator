@@ -9,8 +9,7 @@ if [ ! -f /data/ipfs-cluster/service.json ]; then
 fi
 
 if [ -f /opt/patch-cluster-config.sh ]; then
-  chmod +x /opt/patch-cluster-config.sh
-  /opt/patch-cluster-config.sh
+  sh /opt/patch-cluster-config.sh
 fi
 
 chown ipfs /data/ipfs-cluster/service.json 2>/dev/null || true
