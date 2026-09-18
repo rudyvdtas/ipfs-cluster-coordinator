@@ -38,23 +38,13 @@ services:
       - CLUSTER_MONITORPINGINTERVAL=15s
       - CLUSTER_PEER_ADDRESSES=${CLUSTER_PEER_ADDRESSES:-}
       - BOOTSTRAP_PEERS=${BOOTSTRAP_PEERS:-}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        chown -R ipfs /data/ipfs-cluster
-        if [ ! -f /data/ipfs-cluster/service.json ]; then
-          echo "Initializing ipfs-cluster configuration..."
-          su-exec ipfs ipfs-cluster-service init --consensus "${IPFS_CLUSTER_CONSENSUS:-crdt}"
-        fi
-        /opt/patch-cluster-config.sh
-        chown ipfs /data/ipfs-cluster/service.json
-        exec /sbin/tini -- /usr/local/bin/entrypoint.sh daemon
+    command: /usr/local/bin/start-cluster.sh
     ports:
       - "9096:9096"
     volumes:
       - cluster_data:/data/ipfs-cluster
       - ./scripts/patch-cluster-config.sh:/opt/patch-cluster-config.sh:ro
+      - ./scripts/start-cluster.sh:/usr/local/bin/start-cluster.sh:ro
     networks:
       default: {}
       cluster-internal:
