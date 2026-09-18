@@ -59,7 +59,7 @@ Note the peer ID from the output. The bootstrap multiaddr for follower peers is:
 | Port | Protocol | Public | Purpose |
 |------|----------|--------|---------|
 | 4001 | TCP+UDP | Yes | IPFS swarm |
-| 8080 | TCP | Yes | IPFS gateway |
+| 8081 | TCP | Yes | IPFS gateway |
 | 9096 | TCP | Yes | Cluster gossip (followers connect here) |
 | 9094 | TCP | **No** | Cluster REST API (internal only, via `cluster-internal` network) |
 | 5001 | TCP | **No** | IPFS API (localhost only) |
