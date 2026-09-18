@@ -13,3 +13,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Dashboard build artifacts
+dashboard/node_modules/
+dashboard/build/
+dashboard/.svelte-kit/
