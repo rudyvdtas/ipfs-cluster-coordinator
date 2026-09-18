@@ -3,7 +3,7 @@
 # Safe to run on every boot, on fresh and existing configs.
 set -e
 
-SERVICE=/data/ipfs-cluster/service.json
+SERVICE=/data/ipfs-cluster/.ipfs-cluster/service.json
 
 [ -f "$SERVICE" ] || { echo "service.json not found; nothing to patch"; exit 0; }
 
