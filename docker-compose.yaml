@@ -38,13 +38,11 @@ services:
       - CLUSTER_MONITORPINGINTERVAL=15s
       - CLUSTER_PEER_ADDRESSES=${CLUSTER_PEER_ADDRESSES:-}
       - BOOTSTRAP_PEERS=${BOOTSTRAP_PEERS:-}
-    command: /usr/local/bin/start-cluster.sh
     ports:
       - "9096:9096"
     volumes:
       - cluster_data:/data/ipfs-cluster
       - ./scripts/patch-cluster-config.sh:/opt/patch-cluster-config.sh:ro
-      - ./scripts/start-cluster.sh:/usr/local/bin/start-cluster.sh:ro
     networks:
       default: {}
       cluster-internal:
