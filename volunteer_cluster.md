@@ -8,17 +8,20 @@ the curated content.
 
 You start a small program (via Docker) on your own machine. That program
 connects to the existing cluster, gets assigned a share of the 110+ curated
-CIDs, and automatically downloads and hosts them. You don't have to manage
-or choose anything — the cluster handles the distribution.
+CIDs, and automatically downloads and hosts them. You don't have to manage or
+choose anything — the cluster assigns CIDs based on which ones currently have
+the fewest replicas, so new volunteers immediately improve overall redundancy.
 
-**Trust model:** The cluster uses an open trust model (`*`) so volunteers can join
-without manual approval. This means any peer can technically add or remove CIDs.
-In practice, the coordinator (DRL) maintains the canonical CID list via
-`curated-cids.json` and the `sync-cids.sh` script — all pins are synced from that
-file. Any unintended changes on other peers have no effect on the pinned content
-and are overwritten on the next sync. The list of curated CIDs is always public
-and reviewable on [GitHub](https://github.com/rudyvdtas/ipfs-cluster-coordinator/blob/main/curated-cids.json)
-and the [live dashboard](https://glimmy.xyz/projects).
+**Trust model:** The coordinator manages the single source of truth:
+[`curated-cids.json`](https://github.com/rudyvdtas/ipfs-cluster-coordinator/blob/main/curated-cids.json).
+The full CID list is always public and reviewable there and on the
+[live dashboard](https://glimmy.xyz/projects). All CIDs are on-chain art
+and metadata indexed by CyberWatch·TheGuild. Volunteers are trusted to host
+content — not to add, remove, or modify the CID list. The cluster uses an open
+join model (`*` trusted peers) so you can connect without manual approval, but
+the coordinator's `curated-cids.json` + `sync-cids.sh` workflow is the only
+mechanism by which CIDs enter or leave the pinset. Volunteers should not run
+`ipfs-cluster-ctl pin add/rm` — the cluster handles all allocation automatically.
 
 The goal: each CID replicated across at least 5 independent volunteers, so no
 single node failure causes content loss. You decide how much disk space you
@@ -160,11 +163,11 @@ added by the coordinator via `curated-cids.json` commits; you can watch the
 repository for changes.
 
 **Can volunteers add or remove CIDs?**
-Technically yes with the current open trust model, but the coordinator's
-`curated-cids.json` + `sync-cids.sh` is the single source of truth. Any
-unintended changes from other peers are overwritten by the next sync.
-The intended behavior is that only the coordinator manages the CID list —
-volunteers are trusted to host, not to curate.
+No — the curator (`curated-cids.json`) is the only mechanism by which CIDs
+enter or leave the pinset. Volunteers should not run `ipfs-cluster-ctl pin add`
+or `pin rm`. The cluster handles all allocation automatically and the
+coordinator's periodic `sync-cids.sh` ensures the pinset always matches the
+curated list.
 
 ## Questions?
 
