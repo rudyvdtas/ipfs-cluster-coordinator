@@ -1,8 +1,8 @@
 # Become a Volunteer — IPFS Cluster (DRL coordinator · TheGuild)
 
-Thank you for helping out! Below you'll find what it means, what you need,
-and how to set up a peer in ~10 minutes that automatically hosts part of
-the curated content.
+Thank you for helping out! Here's how it works: you reach out, the coordinator
+shares the cluster secret and bootstrap address with you, and you set up a peer
+in ~10 minutes that automatically hosts part of the curated content.
 
 ## What exactly will you do?
 
@@ -12,20 +12,22 @@ CIDs, and automatically downloads and hosts them. You don't have to manage or
 choose anything — the cluster assigns CIDs based on which ones currently have
 the fewest replicas, so new volunteers immediately improve overall redundancy.
 
-**Trust model:** The coordinator manages the single source of truth:
+**Trust model:** Volunteers join after the coordinator shares the cluster secret
+and bootstrap address — there is no open sign-up. The secret is the access gate.
+
+The coordinator manages the single source of truth:
 [`curated-cids.json`](https://github.com/rudyvdtas/ipfs-cluster-coordinator/blob/main/curated-cids.json).
 The full CID list is always public and reviewable there and on the
 [live dashboard](https://glimmy.xyz/projects). All CIDs are on-chain art
 and metadata indexed by CyberWatch·TheGuild. Volunteers are trusted to host
-content — not to add, remove, or modify the CID list. The cluster uses an open
-join model (`*` trusted peers) so you can connect without manual approval, but
-the coordinator's `curated-cids.json` + `sync-cids.sh` workflow is the only
-mechanism by which CIDs enter or leave the pinset. Volunteers should not run
-`ipfs-cluster-ctl pin add/rm` — the cluster handles all allocation automatically.
+content — not to add, remove, or modify the CID list.
+
+The cluster assigns CIDs based on which ones currently have the fewest replicas,
+so new volunteers immediately improve overall redundancy. You decide how much
+disk space you contribute; CIDs are allocated accordingly.
 
 The goal: each CID replicated across at least 5 independent volunteers, so no
-single node failure causes content loss. You decide how much disk space you
-contribute; the cluster assigns CIDs based on that capacity.
+single node failure causes content loss.
 
 ## Requirements
 
@@ -35,7 +37,7 @@ contribute; the cluster assigns CIDs based on that capacity.
 | RAM | At least 1.5–2 GB (Kubo + Cluster together use ~500 MB–1 GB idle) |
 | Disk space | As much as you want to contribute, configurable via `IPFS_STORAGE_MAX` |
 | Software | Docker |
-| Access | The cluster secret (I will share this privately with you) |
+| Access | The cluster secret + bootstrap address (shared privately after you sign up) |
 
 `ipfs/kubo` and `ipfs/ipfs-cluster` are multi-arch images: Docker
 automatically pulls the correct version for your architecture, so you
@@ -66,7 +68,7 @@ nano .env
 Fill in the following fields:
 
 ```
-CLUSTER_SECRET=<the secret I will share with you privately>
+CLUSTER_SECRET=<the secret the coordinator shared with you>
 CLUSTER_PEERNAME=choose-a-unique-name         # e.g. "jan-vps" — for identification only
 COORDINATOR_PEER_ID=12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd
 IPFS_STORAGE_MAX=200GB                         # how much you want to contribute; leave empty for 4TB default
