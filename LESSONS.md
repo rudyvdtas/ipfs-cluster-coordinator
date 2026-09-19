@@ -7,6 +7,7 @@
 | Component | Locatie | Status |
 |-----------|---------|--------|
 | VPS | Eigen VPS, 149.210.143.16, via Coolify | ✅ Draait |
+| SSH | `ssh root@149.210.143.16` (vanaf Mac) | ✅ |
 | Coolify | 1 project, 2 services: `ipfs-cluster-coordinator` (cluster) + `sveltekit-monitor-app` (monitor) | ✅ Gedeployed |
 | IPFS (Kubo) | Docker, container `ipfs`, vanuit `ipfs-cluster-coordinator/docker-compose.yaml` | ✅ Healthy |
 | Cluster peer | Docker, container `cluster`, vanuit `ipfs-cluster-coordinator/docker-compose.yaml` | ✅ Draait, peer-ID `12D3KooWSw...` |
