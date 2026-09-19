@@ -9,8 +9,20 @@ the curated content.
 You start a small program (via Docker) on your own machine. That program
 connects to the existing cluster, gets assigned a share of the 110+ curated
 CIDs, and automatically downloads and hosts them. You don't have to manage
-or choose anything — the cluster handles the distribution. You are **read
-only** and can only replicate; you cannot add or remove CIDs yourself.
+or choose anything — the cluster handles the distribution.
+
+**Trust model:** The cluster uses an open trust model (`*`) so volunteers can join
+without manual approval. This means any peer can technically add or remove CIDs.
+In practice, the coordinator (DRL) maintains the canonical CID list via
+`curated-cids.json` and the `sync-cids.sh` script — all pins are synced from that
+file. Any unintended changes on other peers have no effect on the pinned content
+and are overwritten on the next sync. The list of curated CIDs is always public
+and reviewable on [GitHub](https://github.com/rudyvdtas/ipfs-cluster-coordinator/blob/main/curated-cids.json)
+and the [live dashboard](https://glimmy.xyz/projects).
+
+The goal: each CID replicated across at least 5 independent volunteers, so no
+single node failure causes content loss. You decide how much disk space you
+contribute; the cluster assigns CIDs based on that capacity.
 
 ## Requirements
 
@@ -103,14 +115,14 @@ correctly and is visible to the cluster.
 
 ## What happens next
 
-Once I see your peer is connected, I will increase the replication factor
-so that the content is distributed across both peers. From that point on,
-each CID is stored on at least 2 peers (you + the coordinator) — that is
-the goal: **redundancy**.
+Once your peer connects, the cluster automatically assigns CIDs to it based on
+the configured replication factor (currently min 2, max 2 — growing to 5 as more
+volunteers join). Your node starts downloading and hosting the assigned CIDs
+immediately — no manual step from the coordinator needed.
 
-This does not happen automatically when your node starts; it is a manual
-step on my side, so it may take some time before you actually start
-downloading and hosting data.
+The long-term goal is **5 independent replicas per CID**: as more volunteers join,
+the replication factor increases so that each artwork is stored on at least
+5 different nodes. This protects against multiple simultaneous node failures.
 
 ## Verify everything works
 
@@ -139,6 +151,20 @@ amount.
 
 **Can I see which CIDs I am hosting?**
 Yes, via `docker exec cluster ipfs-cluster-ctl status` (step 6 above).
+
+**Can I review the CID list before joining?**
+Yes — the curated CID list is public on [GitHub](https://github.com/rudyvdtas/ipfs-cluster-coordinator/blob/main/curated-cids.json)
+and visible on the [live dashboard](https://glimmy.xyz/projects). All CIDs
+are on-chain art and metadata indexed by CyberWatch·TheGuild. New CIDs are
+added by the coordinator via `curated-cids.json` commits; you can watch the
+repository for changes.
+
+**Can volunteers add or remove CIDs?**
+Technically yes with the current open trust model, but the coordinator's
+`curated-cids.json` + `sync-cids.sh` is the single source of truth. Any
+unintended changes from other peers are overwritten by the next sync.
+The intended behavior is that only the coordinator manages the CID list —
+volunteers are trusted to host, not to curate.
 
 ## Questions?
 
