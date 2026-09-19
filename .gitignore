@@ -13,3 +13,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Credentials & keys
+*.pem
+*.key
+*.crt
+service.json

@@ -1,7 +1,6 @@
 # IPFS Cluster Coordinator
 
 Docker Compose deployment for the IPFS Cluster seed/coordinator peer.
-Deployed via Coolify as a "Docker Compose" resource.
 
 ## Prerequisites
 
@@ -22,7 +21,8 @@ Copy `.env.example` to `.env` and fill in:
 | `CLUSTER_PEERNAME` | Human-readable name for this peer |
 | `BOOTSTRAP_PEERS` | Empty for the seed peer. For followers: `/ip4/<seed-ip>/tcp/9096/p2p/<seed-peer-id>` |
 
-In Coolify, set `CLUSTER_SECRET` and `COORDINATOR_PEER_ID` via the **Secrets** UI (not in the compose file).
+Set `CLUSTER_SECRET` and `COORDINATOR_PEER_ID` via secrets management
+(not in the compose file).
 
 ## Roles
 

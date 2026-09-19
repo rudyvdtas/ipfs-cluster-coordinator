@@ -6,13 +6,13 @@
 
 | Component | Locatie | Status |
 |-----------|---------|--------|
-| VPS | Eigen VPS, 149.210.143.16, via Coolify | ✅ Draait |
-| SSH | `ssh root@149.210.143.16` (vanaf Mac) | ✅ |
-| Coolify | 1 project, 2 services: `ipfs-cluster-coordinator` (cluster) + `sveltekit-monitor-app` (monitor) | ✅ Gedeployed |
+| VPS | Productie-VPS | ✅ Draait |
+| SSH | Productiehost — wordt privé beheerd, niet hier gedocumenteerd | ✅ |
+| Deployment | 2 services: `ipfs-cluster-coordinator` (cluster) + `sveltekit-monitor-app` (monitor) | ✅ Gedeployed |
 | IPFS (Kubo) | Docker, container `ipfs`, vanuit `ipfs-cluster-coordinator/docker-compose.yaml` | ✅ Healthy |
-| Cluster peer | Docker, container `cluster`, vanuit `ipfs-cluster-coordinator/docker-compose.yaml` | ✅ Draait, peer-ID `12D3KooWSw...` |
+| Cluster peer | Docker, container `cluster`, vanuit `ipfs-cluster-coordinator/docker-compose.yaml` | ✅ Draait |
 | Dashboard (SvelteKit) | Docker, container `cluster-dashboard`, vanuit `sveltekit-monitor-app/docker-compose.yaml` | ✅ Read-only, toont cluster data |
-| Caddy reverse proxy | VPS host, poort 80 → 443 → 3000 | ✅ HTTPS via Let's Encrypt |
+| Caddy reverse proxy | VPS host, poort 80 → 443 → 3000 | ✅ HTTPS |
 | Git repos | GitHub `rudyvdtas/ipfs-cluster-coordinator` + `rudyvdtas/sveltekit-monitor-app` | ✅ Gepusht |
 
 ### Deployment architectuur
@@ -27,10 +27,11 @@ Beide services delen het `cluster-internal` Docker netwerk (`external: true`) zo
 de dashboard container de cluster REST API kan bereiken. De communicatie loopt via
 `http://cluster:9094` (CLUSTER_API_URL in dashboard Dockerfile).
 
-**Let op — Coolify DNS-limiet:** Coolify negeert `container_name` en deployed beide
-services als aparte compose stacks. Docker DNS resolved service namen (`cluster`) alleen
-binnen dezelfde stack. Fallback: zet `CLUSTER_API_URL` in Coolify op het IP van de
-cluster container op het `cluster-internal` netwerk.
+**Let op — DNS-limiet bij aparte compose stacks:** Wanneer services in aparte compose
+stacks draaien, resolved Docker DNS service namen (`cluster`) alleen
+binnen dezelfde stack. Fallback: zet `CLUSTER_API_URL` op het interne netwerk-IP
+van de cluster container. Een network alias op het gedeelde Docker netwerk
+lost dit op (mits de deployment tool het niet strip):
 
 ### Functionaliteit
 
@@ -59,7 +60,8 @@ De oplossing bestond uit drie stappen:
    sed -i 's|/ip4/127.0.0.1/tcp/9094|/ip4/0.0.0.0/tcp/9094|' service.json
    ```
 
-3. **Dashboard → cluster DNS** — Coolify container namen zijn random, Docker DNS over
+3. **Dashboard → cluster DNS** — container namen kunnen willekeurig zijn
+   (bv. bij sommige deployment tools), Docker DNS over
    stacks heen is onbetrouwbaar. Uiteindelijk werkte de `cluster-internal` netwerk alias
    (`aliases: cluster`) wel, waardoor `http://cluster:9094` resolved vanuit de dashboard
    container.
@@ -113,11 +115,10 @@ paneel.
 Na het zetten van het A-record duurde het enige tijd voordat DNS overal bijgewerkt was.
 De laptop met Google DNS (8.8.8.8) zag het direct; andere apparaten hadden vertraging.
 
-### 9. SSH-sleutel
+### 9. SSH-toegang
 
-De VPS accepteert alleen publickey-auth. Instellen van de lokale SSH-sleutel in
-`.ssh/authorized_keys` op de VPS is nodig om zonder wachtwoord via de Mac te kunnen
-SSH'en.
+Toegang tot de productiehost wordt privé beheerd en is niet onderdeel van
+deze publieke documentatie.
 
 ### 10. Colima op Mac
 
@@ -144,13 +145,13 @@ De cluster en de monitor zijn aparte concerns en moeten onafhankelijk blijven:
 "zodat DNS werkt", maar dat creëert technische schuld en koppelt dingen die los horen.
 Het DNS-probleem is een netwerkconfiguratie-issue, geen architectuur-issue.
 
-### 12. Coolify: Docker DNS werkt niet over compose stacks heen
+### 12. Docker DNS werkt niet over aparte compose stacks heen
 
-Coolify negeert `container_name` in docker-compose en genereert eigen container namen.
-Omdat beide services in **aparte** compose stacks draaien (andere `--project-name`),
+Sommige deployment tools negeren `container_name` en genereren eigen container namen.
+Omdat services in **aparte** compose stacks kunnen draaien (andere `--project-name`),
 resolved Docker's interne DNS service-namen (`cluster`) niet in de andere stack.
 
-**Network alias werkt wél (mits Coolify het niet stript):**
+**Network alias werkt wel (mits de tool het niet strip):**
 ```yaml
 # in cluster docker-compose
 networks:
@@ -187,7 +188,7 @@ standaard plain HTTP op poort 9094.
 
 ## Volgende stappen (kort)
 
-1. ~~SSH-sleutel installeren op VPS (voor Mac-terminal toegang)~~ ✅
+1. ~~SSH-toegang productiehost~~ ✅
 2. Eerste vrijwilliger onboarden (via `volunteer_cluster.md`)
 3. Replicatie updaten naar min=2 na 2e peer (`scripts/sync-cids.sh 2 2`)
 4. Nog 5 CIDs onderzoeken bij sync (fouten)
@@ -195,48 +196,27 @@ standaard plain HTTP op poort 9094.
 
 ## Laatste sessie — 18 Sep 2026
 
-### 15. Coolify container-naam verandert bij elke deploy
+### 15. Container-naam verandert bij elke deploy
 
-Coolify genereert een nieuw suffix voor de container-naam bij elke deploy of herstart.
-`container_name` in docker-compose wordt genegeerd. Gebruik altijd een dynamische lookup:
+Sommige deployment tools genereren een nieuw suffix voor de container-naam bij elke
+deploy of herstart. `container_name` in docker-compose wordt soms genegeerd.
+Gebruik een dynamische lookup:
 
 ```bash
 NAME=$(docker ps --format '{{.Names}}' | grep -i cluster)
 docker exec $NAME ipfs-cluster-ctl ...
 ```
 
-De container-naam van de coordinator was eerst `cluster-koaxw04zgtze4rjo16frrlbc-181243494596`
-en later `cluster-koaxw04zgtze4rjo16frrlbc-192817309819`.
-
-### 16. CLUSTER_SECRET & COORDINATOR_PEER_ID ophalen op de VPS
+### 16. Coordinator peer ID opvragen
 
 ```bash
-# Secret
-NAME=$(docker ps --format '{{.Names}}' | grep -i cluster)
-docker exec $NAME grep '"secret"' /data/ipfs-cluster/service.json
-
-# Peer ID
-docker exec $NAME ipfs-cluster-ctl id
+docker exec <container-name> ipfs-cluster-ctl id
 ```
-
-Coordinator peer ID: `12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd`
 
 ### 17. CIDs pinnen vanaf de VPS
 
-De repo moet op de VPS staan (`git clone` in `/opt`). Vanuit die directory:
-
-```bash
-NAME=$(docker ps --format '{{.Names}}' | grep -i cluster)
-python3 -c "
-import json
-with open('curated-cids.json') as f:
-    cids = json.load(f)
-for c in cids:
-    print(c)
-" | while read cid; do
-  docker exec $NAME ipfs-cluster-ctl pin add "$cid" --replication-min 1 --replication-max 1
-done
-```
+De repo moet op de VPS staan (`git clone` in `/opt`). Gebruik `scripts/sync-cids.sh`
+vanuit die directory om CIDs te pinnen.
 
 ### 18. Vrijwilligers onboarden zonder handmatige whitelist
 
@@ -245,15 +225,19 @@ zichzelf aanmelden zonder dat de coordinator ze handmatig hoeft toe te voegen. Z
 alleen nodig:
 
 - `CLUSTER_SECRET` — hex string uit `service.json`
-- Bootstrap multiaddress met coordinator peer ID: `/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd`
+- Bootstrap multiaddress met coordinator peer ID: `/ip4/<coordinator-ip>/tcp/9096/p2p/<coordinator-peer-id>`
 
-De `TRUSTED_PEERS` env var in Coolify wordt niet automatisch toegepast — het
+De `TRUSTED_PEERS` env var wordt niet automatisch toegepast — het
 `patch-cluster-config.sh` script is alleen als volume gemount, niet als startup command.
 En `CLUSTER_CRDT_TRUSTEDPEERS=*` overschrijft `trusted_peers` uit `service.json`.
 
 ### 19. volunteer_cluster.md moet actuele peer ID bevatten
 
-De voorbeeld peer IDs in `volunteer_cluster.md` waren oude dummy waarden
-(`12D3KooWHFTW...`). Deze zijn vervangen door de echte coordinator peer ID, zodat
+De voorbeeld peer IDs in `volunteer_cluster.md` waren oude dummy waarden.
+Deze zijn vervangen door de echte coordinator peer ID, zodat
 vrijwilligers het bestand letterlijk kunnen volgen zonder dat de coordinator
 handmatig het juiste ID moet doorgeven.
+
+> De peer ID in `volunteer_cluster.md` is bewust publiek — deze is nodig om
+> te bootstrappen en vormt geen beveiligingsrisico zonder de bijbehorende
+> `CLUSTER_SECRET`.
