@@ -295,9 +295,9 @@ export IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
 
 # --- STEL HIER JE WAARDES IN ---
 CLUSTER_SECRET="<HIER_JE_SECRET_INVULLEN>"
-COORDINATOR_PEER_ID="12D3KooWSwQrE3YTewpixUEYxLBd6pBQCDyDposciqtXNHPTaTsz"
+COORDINATOR_PEER_ID="<coordinator-peer-id>"
 CLUSTER_PEERNAME="artbox-pi-jan"    # kies een unieke naam
-COORDINATOR_IP="149.210.143.16"
+COORDINATOR_IP="<coordinator-ip>"
 
 # 1. Secret instellen
 ipfs-cluster-service config set secret "${CLUSTER_SECRET}"
@@ -316,8 +316,9 @@ ipfs-cluster-service config set cluster.bootstrap "[
   \"/ip4/${COORDINATOR_IP}/tcp/9096/p2p/${COORDINATOR_PEER_ID}\"
 ]"
 
-# 6. Alleen coordinator mag pins wijzigen (read-only volunteer)
+# 6. Alleen coordinator mag pins wijzigen (read-only volunteer via follower_mode)
 ipfs-cluster-service config set trusted_peers "[\"${COORDINATOR_PEER_ID}\"]"
+ipfs-cluster-service config set follower_mode true
 '
 ```
 
@@ -371,7 +372,7 @@ sudo ufw allow 4001/udp
 sudo ufw allow 9096/tcp
 
 # Optioneel: beperk 9096 tot alleen de coordinator voor extra veiligheid
-# sudo ufw allow from 149.210.143.16 to any port 9096 proto tcp
+# sudo ufw allow from <coordinator-ip> to any port 9096 proto tcp
 
 # Activeer firewall (alleen als SSH niet geblokkeerd wordt)
 sudo ufw allow 22/tcp
@@ -495,7 +496,7 @@ Als IPFS niet draait: `sudo systemctl restart ipfs`
 
 ### Peer verschijnt niet op het dashboard
 1. Check of poort 9096 open is vanuit het internet
-2. Check of de coordinator bereikbaar is: `nc -zv 149.210.143.16 9096`
+2. Check of de coordinator bereikbaar is: `nc -zv <coordinator-ip> 9096`
 3. Check logs: `sudo journalctl -u ipfs-cluster -n 100 --no-pager | grep -i error`
 
 ### Geen peers in IPFS swarm

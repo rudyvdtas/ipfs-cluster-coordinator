@@ -18,13 +18,18 @@ vervolgens **automatisch** welke peers elk CID daadwerkelijk opslaan
 via de replicatiefactor. Vrijwilligers hoeven niets te kiezen — zij
 ontvangen allocaties en hosten de content.
 
+Vrijwillige peers draaien in **follower mode** (`CLUSTER_FOLLOWERMODE=true`).
+Hierdoor zijn pin/unpin-operaties op de vrijwilliger lokaal uitgeschakeld.
+Alleen de coordinator kan de pinset wijzigen.
+
 ## Voorwaarden (vrijwilliger)
 
 - Docker (met Docker Compose) geïnstalleerd.
 - Poort `9096/tcp` **uitgaand** open (naar de coordinator toe).
   Inkomend hoeft niet open, tenzij andere peers jouw machine als
   bootstrap willen gebruiken.
-- Het `CLUSTER_SECRET` van de cluster (deel ik alleen met deelnemers).
+- Het `CLUSTER_SECRET` van de cluster. De coordinator deelt dit via een privékanaal.
+  Deel het secret nooit in publieke issues, pull requests, logs, chat of in Git.
 
 ## Stap 1: Haal de gegevens van de coordinator op
 
@@ -34,9 +39,9 @@ Op de **coordinator-machine**:
 docker exec cluster ipfs-cluster-ctl id
 ```
 
-Noteer de peer-ID:
+Noteer de peer-ID (voorbeeld):
 ```
-12D3KooWHFTWFc97iyXyPEPX1Rxs1AaUxk2a6rDdkRQBUfybsfok | hetzner-coordinator
+<coordinator-peer-id> | hetzner-coordinator
 ```
 
 Haal het publieke IP van de coordinator op:
@@ -66,16 +71,11 @@ cp .env.example .env
 
 | Variabele | Waarde |
 |-----------|--------|
-| `CLUSTER_SECRET` | **Hetzelfde** secret als de coordinator |
-| `COORDINATOR_PEER_ID` | **Idem** als coordinator, zodat alleen hij de pinset kan wijzigen |
+| `CLUSTER_SECRET` | **Hetzelfde** secret als de coordinator — wordt privé gedeeld, nooit in Git of publieke kanalen |
+| `COORDINATOR_PEER_ID` | Peer-ID van de coordinator |
+| `CLUSTER_FOLLOWERMODE` | Zet op `true` voor vrijwilligers — schakelt pin/unpin lokaal uit |
 | `CLUSTER_PEERNAME` | Unieke naam voor deze peer, bijv. `peer-fra-2` |
 | `BOOTSTRAP_PEERS` | `/ip4/<coordinator-ip>/tcp/9096/p2p/<coordinator-peer-id>` |
-
-Vind de secret op de coordinator:
-
-```bash
-docker exec cluster grep '"secret"' /data/ipfs-cluster/service.json
-```
 
 ## Stap 5: Start de peer
 

@@ -2,10 +2,9 @@
 
 ## Probleem
 
-Een volunteer-peer achter NAT (privaat IP `192.168.160.x`, Docker Desktop op macOS) kan
-wél uitgaand verbinden met de coordinator (publiek IP `149.210.143.16`), maar de coordinator
-kan de volunteer niet terugbereiken. De volunteer adverteert z'n Docker-bridge IP, wat vanaf
-de VPS onbereikbaar is.
+Een volunteer-peer achter NAT (privaat IP, bv. een Docker-bridge adres op macOS) kan
+wél uitgaand verbinden met de coordinator (publiek IP `<coordinator-ip>`), maar de coordinator
+kan de volunteer niet terugbereiken omdat het geadverteerde IP vanaf de coordinator onbereikbaar is.
 
 Hierdoor:
 
@@ -19,15 +18,15 @@ Hierdoor:
 | Check | Status |
 |-------|--------|
 | `CLUSTER_CRDT_TRUSTEDPEERS=*` op coordinator | `*` actief |
-| `trusted_peers` in `service.json` bevat alle 3 peer IDs | Geldig |
-| Poort 9096 op VPS open (iptables + docker-proxy) | Open |
+| `trusted_peers` in `service.json` bevat de coordinator en alle peers | Geldig |
+| Poort 9096 op coordinator open | Open |
 | Beide peers draaien zelfde ipfs-cluster versie (1.1.6) | Match |
 | Volunteer ziet de coordinator in eigen `peers ls` | Ja |
 | `pin_only_on_trusted_peers: false` | Correct |
 
 ## Wat níet werkt
 
-De coordinator kan `192.168.160.x:9096` niet bereiken. In theorie zou libp2p de bestaande
+De coordinator kan het private adres niet bereiken. In theorie zou libp2p de bestaande
 uitgaande verbinding van de volunteer moeten hergebruiken voor bidirectioneel verkeer, maar
 in de praktijk probeert ipfs-cluster een directe verbinding naar de geadverteerde adressen
 te openen voor CRDT-sync en metric-collectie — en dat faalt.
