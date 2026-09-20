@@ -36,7 +36,7 @@ lost dit op (mits de deployment tool het niet strip):
 ### Functionaliteit
 
 - 105 van 110 CIDs gepind in de cluster (5 errors onbekend)
-- Coordinator/vrijwilliger rollenscheiding via `CLUSTER_CRDT_TRUSTEDPEERS`
+- Coordinator/vrijwilliger rollenscheiding via `CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID}` (alleen coordinator produceert pinset-operaties) + `CLUSTER_FOLLOWERMODE=true` op vrijwilligers
 - Dashboard toont peers, pin-status per CID, toggle CID lijst
 - REST API op intern netwerk `cluster-internal` (niet publiek)
 - Sync-script in repo (`scripts/sync-cids.sh`) om CID lijst te laden
@@ -92,11 +92,10 @@ object als tweede item wordt niet door docker-compose geaccepteerd.
 De gebruikersgroep heet `users` (gid 100), niet `ipfs`. Gebruik `chown ipfs` (zonder :groep)
 of `chown ipfs:users` / `chown 1000:100`.
 
-### 5. YAML sed range patroon is bros
+### 5. JSON config patchen met sed range is bros
 
-`sed -i "/\"trusted_peers\": \[/,/],/c ..."` werkt alleen de eerste keer (wanneer `trusted_peers`
-pretty-printed is over 3 regels). Na de eerste patch staat het op 1 regel → de sed range
-matcht onbedoeld verder in het bestand en verwijdert het `api`-gedeelte. **Vervangen door awk.**
+`sed` range patronen op JSON config zijn breekbaar: na de eerste patch staat de config
+op 1 regel → de sed range matcht onbedoeld verder in het bestand. **Vervangen door awk.**
 
 ### 6. NDJSON van /pins endpoint
 
@@ -218,18 +217,16 @@ docker exec <container-name> ipfs-cluster-ctl id
 De repo moet op de VPS staan (`git clone` in `/opt`). Gebruik `scripts/sync-cids.sh`
 vanuit die directory om CIDs te pinnen.
 
-### 18. Vrijwilligers onboarden zonder handmatige whitelist
+### 18. Coordinator-only pinset via CRDT_TRUSTEDPEERS
 
-Met `CLUSTER_CRDT_TRUSTEDPEERS=*` in docker-compose (huidige setup) kunnen vrijwilligers
-zichzelf aanmelden zonder dat de coordinator ze handmatig hoeft toe te voegen. Ze hebben
-alleen nodig:
+`CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID}` in docker-compose zorgt dat
+alleen de coordinator CRDT pinset-operaties produceert. Vrijwilligers ontvangen
+en passen de updates toe maar kunnen zelf geen pinset-wijzigingen initiëren.
+`CLUSTER_FOLLOWERMODE=true` op vrijwilligers is een extra lokale beveiligingslaag.
+Vrijwilligers hebben alleen nodig:
 
 - `CLUSTER_SECRET` — hex string uit `service.json`
 - Bootstrap multiaddress met coordinator peer ID: `/ip4/<coordinator-ip>/tcp/9096/p2p/<coordinator-peer-id>`
-
-De `TRUSTED_PEERS` env var wordt niet automatisch toegepast — het
-`patch-cluster-config.sh` script is alleen als volume gemount, niet als startup command.
-En `CLUSTER_CRDT_TRUSTEDPEERS=*` overschrijft `trusted_peers` uit `service.json`.
 
 ### 19. volunteer_cluster.md moet actuele peer ID bevatten
 

@@ -316,8 +316,7 @@ ipfs-cluster-service config set cluster.bootstrap "[
   \"/ip4/${COORDINATOR_IP}/tcp/9096/p2p/${COORDINATOR_PEER_ID}\"
 ]"
 
-# 6. Alleen coordinator mag pins wijzigen (read-only volunteer via follower_mode)
-ipfs-cluster-service config set trusted_peers "[\"${COORDINATOR_PEER_ID}\"]"
+# 6. Follower mode (read-only — voorkomt lokale pin/unpin)
 ipfs-cluster-service config set follower_mode true
 '
 ```
