@@ -17,8 +17,7 @@ Hierdoor:
 
 | Check | Status |
 |-------|--------|
-| `CLUSTER_CRDT_TRUSTEDPEERS=*` op coordinator | `*` actief |
-| `trusted_peers` in `service.json` bevat de coordinator en alle peers | Geldig |
+| `CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID}` op coordinator | Alleen coordinator produceert pinset-operaties |
 | Poort 9096 op coordinator open | Open |
 | Beide peers draaien zelfde ipfs-cluster versie (1.1.6) | Match |
 | Volunteer ziet de coordinator in eigen `peers ls` | Ja |
@@ -44,6 +43,5 @@ Zie `volunteer_cluster.md` voor de volledige instructies voor de volunteer.
 
 ## Geprobeerde fixes (niet afdoende)
 
-- `CLUSTER_CRDT_TRUSTEDPEERS` van `${COORDINATOR_PEER_ID}` naar `*` — nodig voor toelaten peers, maar lost NAT niet op
-- `TRUSTED_PEERS` env var met comma-separated IDs in patch-script — geldige config, maar connectie blijft asymmetrisch
+- `CLUSTER_CRDT_TRUSTEDPEERS` van `${COORDINATOR_PEER_ID}` naar `*` — nodig voor CRDT-deelname, maar lost NAT niet op
 - Herstarten beide peers — peer verschijnt kort en verdwijnt weer

@@ -17,7 +17,7 @@ Copy `.env.example` to `.env` and fill in:
 | Variable | Description |
 |----------|-------------|
 | `CLUSTER_SECRET` | 256-bit hex secret shared across all peers. Generate: `od -vN 32 -An -tx1 /dev/urandom \| tr -d ' \n'` |
-| `COORDINATOR_PEER_ID` | Peer ID of this coordinator. Only this peer may modify the pinset (`CLUSTER_CRDT_TRUSTEDPEERS`). Get it with `docker exec cluster ipfs-cluster-ctl id` |
+| `COORDINATOR_PEER_ID` | Peer ID of this coordinator. Set `CLUSTER_CRDT_TRUSTEDPEERS` to this value so only this peer may produce CRDT operations (pin/unpin). Get it with `docker exec cluster ipfs-cluster-ctl id` |
 | `CLUSTER_PEERNAME` | Human-readable name for this peer |
 | `BOOTSTRAP_PEERS` | Empty for the seed peer. For followers: `/ip4/<seed-ip>/tcp/9096/p2p/<seed-peer-id>` |
 
