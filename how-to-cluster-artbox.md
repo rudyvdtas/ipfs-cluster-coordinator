@@ -1,254 +1,194 @@
-# Vernis ArtBox + CyberWatch Cluster — Raspberry Pi Setup
+# IPFS Cluster volunteer toevoegen aan een bestaande ArtBox
 
-Deze handleiding installeert een volledige **Vernis ArtBox** (IPFS node + NFT tools) op
-een Raspberry Pi 4 en voegt daar een **IPFS Cluster volunteer peer** aan toe die
-verbinding maakt met de CyberWatch coordinator.
+Deze handleiding gaat uit van een **bestaande, werkende ArtBox** met Kubo/IPFS.
+Je voegt hier IPFS Cluster als aparte volunteer-service aan toe.
 
-Na deze setup:
-- draait je Pi een standalone IPFS node (Kubo) met SSD-optimalisatie
-- heb je de ArtBox `ipfs-tools` CLI voor NFT-downloads, backups en health checks
-- is je Pi een **read-only volunteer** in het CyberWatch cluster
-- worden de 111+ curated CIDs automatisch verdeeld en gehost
+**Veilige architectuur:** Cluster krijgt een **eigen, aparte Kubo-instance**. Zo blijft de
+persoonlijke pinset van de ArtBox-eigenaar beschermd tegen Cluster-herverdeling of
+pinsetwijzigingen.
 
 ---
 
-## Vereisten
+## Architectuur
 
-| Wat | Detail |
-|---|---|
-| Hardware | Raspberry Pi 4 (4GB of 8GB) — ARM64 |
-| Opslag | SSD via USB, minimaal 128GB (1TB aanbevolen) |
-| OS | Raspberry Pi OS 64-bit (Bookworm) |
-| Netwerk | LAN of WiFi met internettoegang |
-| Poorten | **4001** (TCP+UDP), **9096** (TCP) moeten open zijn in je router/firewall |
-| Cluster secret | Krijg je privé van de coordinator |
+```
+ArtBox Raspberry Pi
+│
+├── ipfs.service
+│   └── ArtBox-Kubo (IPFS_PATH=/opt/ipfs-data/ipfs)
+│       ├── privé-CIDs van de eigenaar
+│       ├── API: 5001
+│       └── gateway: 8080
+│
+├── ipfs-cluster-ipfs.service
+│   └── Cluster-Kubo (IPFS_PATH=/opt/ipfs-data/cluster-ipfs)
+│       ├── uitsluitend Cluster-managed CIDs
+│       ├── API: 5002
+│       └── gateway: 8081 (indien nodig)
+│
+└── ipfs-cluster.service
+    └── IPFS Cluster volunteer
+        ├── gebruikt de Cluster-Kubo API (5002)
+        ├── Cluster API: 9094
+        └── Cluster peer communication: 9096
+```
+
+IPFS Cluster praat **niet** met de ArtBox-Kubo, maar met de eigen Cluster-Kubo:
+
+```
+IPFS Cluster → http://127.0.0.1:5002 → Cluster-Kubo (aparte repository)
+```
+
+### Waarom niet de ArtBox-Kubo hergebruiken?
+
+```
+ArtBox/Kubo
+└── lokale pins van de eigenaar
+
+IPFS Cluster ──> zelfde Kubo API ──> zelfde pinset
+```
+
+Kubo maakt geen onderscheid tussen een pin van de ArtBox-eigenaar en een pin van Cluster.
+Wanneer Cluster een CID uit de gedeelde pinset verwijdert (bv. bij herverdeling), kan het
+een lokale ArtBox-pin unpinnen. `follower_mode=true` voorkomt dit niet — het voorkomt alleen
+dat de volunteer *zelf* pinsetwijzigingen initieert.
+
+Een aparte Cluster-Kubo is de enige garantie dat ArtBox-CIDs nooit verdwijnen door
+Cluster-actie.
+
+**Wat er niet verandert:**
+- ArtBox `ipfs.service` blijft ongewijzigd
+- ArtBox-tools (`ipfs-tools`) blijven werken
+- ArtBox-pinset wordt nooit aangeraakt door Cluster
+
+**Wat er bijkomt:**
+- Aparte Kubo-instance voor Cluster in `/opt/ipfs-data/cluster-ipfs`
+- `ipfs-cluster-ipfs.service` (systemd)
+- `ipfs-cluster-service` + `ipfs-cluster-ctl` binaries
+- `ipfs-cluster.service` (systemd)
+- Cluster-configuratie in `/opt/ipfs-data/cluster`
+
+**Kanttekening:** twee Kubo-daemons kosten extra geheugen (elk ~200-400 MB), CPU en
+schijfruimte. Op een Raspberry Pi 4 (4GB+) is dat goed te doen, maar houd er rekening mee.
 
 ---
 
-## Deel 1 — ArtBox installeren (IPFS node)
+## Stappenplan
 
-### 1.1 Raspberry Pi OS voorbereiden
+### 1. Bestaande ArtBox-Kubo controleren
 
 ```bash
-# Update het systeem
-sudo apt update && sudo apt upgrade -y
-
-# Installeer basisafhankelijkheden
-sudo apt install -y curl wget tar python3 python3-pip python3-venv jq ufw smartmontools
-
-# Optioneel: wijzig hostname
-sudo hostnamectl set-hostname artbox
+sudo systemctl status ipfs
 ```
 
-### 1.2 SSH inschakelen (als dat nog niet is gebeurd)
+Controleer het IPFS_PATH dat ArtBox gebruikt (meestal `/opt/ipfs-data/ipfs`):
 
 ```bash
-sudo systemctl enable ssh
-sudo systemctl start ssh
+sudo -u ipfs ipfs config Path
 ```
 
-### 1.3 SSD voorbereiden
+### 2. Cluster-Kubo installeren
 
-Sluit de SSD aan via USB. Controleer de device-naam:
-
-```bash
-lsblk -o NAME,SIZE,TYPE,MOUNTPOINT
-```
-
-Je SSD verschijnt waarschijnlijk als `/dev/sda`. **Als er al data op staat die je wilt
-bewaren, sla deze stap over.** Anders:
+Installeer een tweede Kubo voor Cluster-gebruik. **Gebruik dezelfde versie als de
+ArtBox-Kubo**, zodat het netwerkprotocol compatibel is.
 
 ```bash
-# Formatteer als ext4 (let op: dit wist alle data op de SSD)
-sudo mkfs.ext4 -F /dev/sda1   # of /dev/sda als er geen partitie is
-```
+# Bepaal de ArtBox-Kubo-versie
+ARTBOX_KUBO_VERSION=$(/usr/local/bin/ipfs version | cut -d' ' -f3)
+echo "$ARTBOX_KUBO_VERSION"
 
-Maak de mount-directory en voeg toe aan fstab:
+# Of stel handmatig in
+ARTBOX_KUBO_VERSION="v0.35.0"
 
-```bash
-sudo mkdir -p /opt/ipfs-data
-
-# Vind de UUID van de SSD
-sudo blkid /dev/sda1   # of /dev/sda
-
-# Voeg toe aan /etc/fstab (vervang <UUID> met de echte waarde)
-echo 'UUID=<UUID> /opt/ipfs-data ext4 defaults,noatime,nodiratime,discard 0 2' | sudo tee -a /etc/fstab
-
-# Mount
-sudo mount -a
-```
-
-Controleer:
-
-```bash
-df -h /opt/ipfs-data
-```
-
-### 1.4 IPFS (Kubo) installeren
-
-```bash
-# Maak een ipfs systeemgebruiker
-sudo useradd -r -m -d /opt/ipfs-data -s /bin/bash ipfs
-
-# Download de laatste Kubo voor ARM64
-KUBO_VERSION="v0.35.0"
-wget "https://dist.ipfs.tech/kubo/${KUBO_VERSION}/kubo_${KUBO_VERSION}_linux-arm64.tar.gz"
-tar -xzf "kubo_${KUBO_VERSION}_linux-arm64.tar.gz"
+cd /tmp
+wget "https://dist.ipfs.tech/kubo/${ARTBOX_KUBO_VERSION}/kubo_${ARTBOX_KUBO_VERSION}_linux-arm64.tar.gz"
+tar -xzf "kubo_${ARTBOX_KUBO_VERSION}_linux-arm64.tar.gz"
 cd kubo
 sudo bash install.sh
 cd .. && rm -rf kubo kubo_*.tar.gz
-
-# Initialiseer IPFS
-export IPFS_PATH=/opt/ipfs-data/ipfs
-sudo -u ipfs ipfs init --profile=lowpower
-
-# Configureer voor SSD-gebruik
-sudo -u ipfs ipfs config Datastore.StorageMax "200GB"
-sudo -u ipfs ipfs config Datastore.StorageGCWatermark 85
-sudo -u ipfs ipfs config Datastore.GCPeriod "1h"
-sudo -u ipfs ipfs config Routing.Type "dhtclient"
-sudo -u ipfs ipfs config Reprovider.Interval "12h"
-sudo -u ipfs ipfs config Swarm.ConnMgr.LowWater 400
-sudo -u ipfs ipfs config Swarm.ConnMgr.HighWater 800
-
-# API en Gateway op localhost zetten (veiliger, cluster praat lokaal met API)
-sudo -u ipfs ipfs config Addresses.API "/ip4/127.0.0.1/tcp/5001"
-sudo -u ipfs ipfs config Addresses.Gateway "/ip4/127.0.0.1/tcp/8080"
-
-# CORS voor lokale toegang
-sudo -u ipfs ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["http://localhost:*", "http://127.0.0.1:*"]'
-sudo -u ipfs ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["PUT", "GET", "POST"]'
 ```
 
-### 1.5 IPFS systemd service aanmaken
+### 3. Cluster-Kubo initialiseren in aparte directory
 
 ```bash
-sudo tee /etc/systemd/system/ipfs.service << 'EOF'
+# Aparte repository — niet in /opt/ipfs-data/ipfs
+sudo -u ipfs mkdir -p /opt/ipfs-data/cluster-ipfs
+
+sudo -u ipfs bash -c '
+  export IPFS_PATH=/opt/ipfs-data/cluster-ipfs
+  ipfs init --profile=lowpower
+'
+```
+
+Let op: de Cluster-Kubo krijgt een **eigen peer ID**. Dat is normaal — hij treedt op als
+een zelfstandige IPFS-node, uitsluitend voor Cluster-verkeer.
+
+### 4. Cluster-Kubo configureren
+
+```bash
+sudo -u ipfs bash -c '
+  export IPFS_PATH=/opt/ipfs-data/cluster-ipfs
+
+  # Storage: Cluster-CIDs nemen ruimte in naast ArtBox-CIDs
+  ipfs config Datastore.StorageMax "100GB"
+  ipfs config Datastore.StorageGCWatermark 85
+  ipfs config Datastore.GCPeriod "1h"
+  ipfs config Routing.Type "dhtclient"
+  ipfs config Reprovider.Interval "0"  # Cluster republiceert zelf niet
+
+  # API op een andere poort dan de ArtBox-Kubo
+  ipfs config Addresses.API "/ip4/127.0.0.1/tcp/5002"
+  ipfs config Addresses.Gateway "/ip4/127.0.0.1/tcp/8081"
+
+  # Swarm op een andere poort dan de ArtBox-Kubo (4001)
+  ipfs config Addresses.Swarm "[\"/ip4/0.0.0.0/tcp/4002\", \"/ip6/::/tcp/4002\"]"
+'
+```
+
+### 5. Cluster-Kubo systemd-service aanmaken
+
+```bash
+sudo tee /etc/systemd/system/ipfs-cluster-ipfs.service << 'EOF'
 [Unit]
-Description=IPFS daemon
+Description=IPFS daemon for Cluster
 After=network.target
 
 [Service]
 Type=notify
 User=ipfs
 Group=ipfs
-Environment=IPFS_PATH=/opt/ipfs-data/ipfs
+Environment=IPFS_PATH=/opt/ipfs-data/cluster-ipfs
 ExecStart=/usr/local/bin/ipfs daemon --enable-gc
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
-MemoryHigh=1G
-MemoryMax=1.5G
+MemoryHigh=512M
+MemoryMax=768M
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable ipfs
-sudo systemctl start ipfs
+sudo systemctl enable ipfs-cluster-ipfs
+sudo systemctl start ipfs-cluster-ipfs
 
 # Controleer
-sudo systemctl status ipfs
-ipfs id
+sudo systemctl status ipfs-cluster-ipfs
 ```
 
-### 1.6 ArtBox management tools installeren
+Test of de API bereikbaar is:
 
 ```bash
-# Clone de ArtBox repo
-cd /opt
-sudo git clone https://github.com/AfroV/ArtBox.git artbox
-cd artbox/nft_setup
-
-# Maak Python venv en installeer dependencies
-sudo python3 -m venv /opt/ipfs-data/venv
-sudo /opt/ipfs-data/venv/bin/pip install requests web3 ipfshttpclient pillow
-
-# Installeer de ipfs-tools CLI wrapper
-sudo tee /usr/local/bin/ipfs-tools << 'SCRIPT'
-#!/bin/bash
-export IPFS_PATH=/opt/ipfs-data/ipfs
-TOOLS_DIR=/opt/artbox/nft_setup
-VENV=/opt/ipfs-data/venv/bin/python
-
-case "${1:-}" in
-  status)
-    echo "=== IPFS Service ==="
-    systemctl is-active ipfs
-    echo ""
-    echo "=== IPFS Peer ID ==="
-    ipfs id | jq -r '.ID'
-    echo ""
-    echo "=== Connected Peers ==="
-    ipfs swarm peers 2>/dev/null | wc -l
-    echo "peers connected"
-    echo ""
-    echo "=== Disk Usage ==="
-    du -sh /opt/ipfs-data/ipfs 2>/dev/null
-    df -h /opt/ipfs-data
-    ;;
-  ssd-health)
-    sudo smartctl -a /dev/sda 2>/dev/null | grep -E 'Model|Capacity|Power_On|Wear_Level|Reallocated|Temperature' || echo "SMART not available"
-    ;;
-  download)
-    if [ -z "$2" ] || [ -z "$3" ]; then
-      echo "Usage: ipfs-tools download <contract_address> <token_id>"
-      exit 1
-    fi
-    sudo $VENV "$TOOLS_DIR/nft_downloader.py" "$2" "$3"
-    ;;
-  csv)
-    if [ -z "$2" ]; then
-      echo "Usage: ipfs-tools csv <file.csv>"
-      exit 1
-    fi
-    sudo $VENV "$TOOLS_DIR/process_nft_csv.py" "$2"
-    ;;
-  monitor)
-    INTERVAL="${2:-60}"
-    echo "Monitoring every ${INTERVAL}s. Press Ctrl+C to stop."
-    while true; do
-      clear
-      echo "=== IPFS Monitor — $(date) ==="
-      echo "Service: $(systemctl is-active ipfs)"
-      echo "Peers: $(ipfs swarm peers 2>/dev/null | wc -l)"
-      echo "Storage: $(du -sh /opt/ipfs-data/ipfs 2>/dev/null | cut -f1)"
-      sleep "$INTERVAL"
-    done
-    ;;
-  backup)
-    sudo bash "$TOOLS_DIR/ipfs_backup_restore.sh" backup
-    ;;
-  *)
-    echo "ArtBox IPFS Tools"
-    echo "  status              Show IPFS node status"
-    echo "  ssd-health          Show SSD health info"
-    echo "  download <addr> <id> Download single NFT"
-    echo "  csv <file.csv>      Batch process NFTs"
-    echo "  monitor [interval]  Continuous monitoring"
-    echo "  backup              Create full backup"
-    ;;
-esac
-SCRIPT
-
-sudo chmod +x /usr/local/bin/ipfs-tools
-
-# Test
-ipfs-tools status
+curl http://127.0.0.1:5002/api/v0/version
 ```
 
----
+### 6. IPFS Cluster binaries installeren
 
-## Deel 2 — IPFS Cluster volunteer toevoegen
-
-### 2.1 ipfs-cluster-service installeren
-
-Download de binary voor ARM64. **Gebruik dezelfde versie als de coordinator.**
+**Gebruik dezelfde versie als de coordinator.**
 Controleer de coordinator-versie met: `docker exec cluster ipfs-cluster-service --version`
 
 ```bash
-# Vervang <VERSION> met de coordinator-versie, bv. 1.0.8
 CLUSTER_VERSION="1.0.8"
 
 cd /tmp
@@ -256,7 +196,6 @@ wget "https://dist.ipfs.tech/ipfs-cluster-service/v${CLUSTER_VERSION}/ipfs-clust
 tar -xzf "ipfs-cluster-service_v${CLUSTER_VERSION}_linux-arm64.tar.gz"
 sudo cp ipfs-cluster-service/ipfs-cluster-service /usr/local/bin/
 sudo cp ipfs-cluster-service/ipfs-cluster-ctl /usr/local/bin/
-sudo cp ipfs-cluster-service/ipfs-cluster-follow /usr/local/bin/
 rm -rf ipfs-cluster-service ipfs-cluster-service_*.tar.gz
 
 # Controleer
@@ -264,30 +203,22 @@ ipfs-cluster-service --version
 ipfs-cluster-ctl --version
 ```
 
-### 2.2 Cluster data directory aanmaken
+### 7. Cluster-configuratie initialiseren
 
 ```bash
+# Aparte directory voor Cluster-config
 sudo mkdir -p /opt/ipfs-data/cluster
 sudo chown -R ipfs:ipfs /opt/ipfs-data/cluster
-```
 
-### 2.3 Cluster configuratiebestand aanmaken
-
-**Let op:** vervang `<CLUSTER_SECRET>`, `<COORDINATOR_PEER_ID>` en `<PEERNAME>` met de
-echte waarden (de secret krijg je van de coordinator).
-
-```bash
-# Maak de config directory
-sudo -u ipfs mkdir -p /opt/ipfs-data/cluster
-
-# Initieer de cluster config (doet niets met IPFS_PATH, gebruikt eigen data dir)
 sudo -u ipfs bash -c '
   export IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
   ipfs-cluster-service init --consensus crdt
 '
 ```
 
-Nu pas je `service.json` aan met de juiste waardes:
+### 8. Cluster configureren
+
+Vervang de placeholders met de echte waarden (secret en peer ID krijg je van de coordinator):
 
 ```bash
 sudo -u ipfs bash -c '
@@ -296,52 +227,52 @@ export IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
 # --- STEL HIER JE WAARDES IN ---
 CLUSTER_SECRET="<HIER_JE_SECRET_INVULLEN>"
 COORDINATOR_PEER_ID="<coordinator-peer-id>"
-CLUSTER_PEERNAME="artbox-pi-jan"    # kies een unieke naam
+CLUSTER_PEERNAME="artbox-pi-jan"
 COORDINATOR_IP="<coordinator-ip>"
 
-# 1. Secret instellen
+# 1. Cluster secret
 ipfs-cluster-service config set secret "${CLUSTER_SECRET}"
 
 # 2. Peernaam
 ipfs-cluster-service config set peername "${CLUSTER_PEERNAME}"
 
-# 3. REST API op alle interfaces + plain HTTP (voor dashboard)
+# 3. REST API via HTTP (voor lokale statuschecks)
 sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
 
-# 4. Verbind met lokale IPFS API
-sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5001|" service.json
+# 4. Verbind met de Cluster-Kubo (niet de ArtBox-Kubo)
+sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5002|" service.json
 
-# 5. Bootstrap naar coordinator
+# 5. Bootstrap naar de coordinator
 ipfs-cluster-service config set cluster.bootstrap "[
   \"/ip4/${COORDINATOR_IP}/tcp/9096/p2p/${COORDINATOR_PEER_ID}\"
 ]"
 
-# 6. Follower mode (read-only — voorkomt lokale pin/unpin)
+# 6. Follower mode
 ipfs-cluster-service config set follower_mode true
 '
 ```
 
-Controleer de configuratie:
+Controleer de resulterende config:
 
 ```bash
-sudo cat /opt/ipfs-data/cluster/service.json | python3 -m json.tool | head -30
+sudo cat /opt/ipfs-data/cluster/service.json | python3 -m json.tool | head -40
 ```
 
-### 2.4 IPFS Cluster systemd service aanmaken
+### 9. IPFS Cluster systemd-service aanmaken
 
 ```bash
 sudo tee /etc/systemd/system/ipfs-cluster.service << 'EOF'
 [Unit]
 Description=IPFS Cluster peer
-After=network.target ipfs.service
-BindsTo=ipfs.service
+After=network.target ipfs-cluster-ipfs.service
+BindsTo=ipfs-cluster-ipfs.service
 
 [Service]
 Type=simple
 User=ipfs
 Group=ipfs
 Environment=IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
-Environment=IPFS_PATH=/opt/ipfs-data/ipfs
+Environment=IPFS_PATH=/opt/ipfs-data/cluster-ipfs
 ExecStart=/usr/local/bin/ipfs-cluster-service daemon
 Restart=always
 RestartSec=10
@@ -349,8 +280,13 @@ LimitNOFILE=65536
 MemoryHigh=512M
 MemoryMax=768M
 
-# Wacht tot IPFS API beschikbaar is
-ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do curl -s http://127.0.0.1:5001/api/v0/version >/dev/null 2>&1 && exit 0; echo "Waiting for IPFS API..."; sleep 2; done; echo "IPFS API not ready after 60s"; exit 1'
+# Wacht tot de Cluster-Kubo API beschikbaar is (poort 5002)
+ExecStartPre=/bin/sh -c '\
+  for i in $(seq 1 30); do \
+    curl -s http://127.0.0.1:5002/api/v0/version >/dev/null 2>&1 && exit 0; \
+    echo "Waiting for Cluster-Kubo API..."; sleep 2; \
+  done; \
+  echo "Cluster-Kubo API not ready after 60s"; exit 1'
 
 [Install]
 WantedBy=multi-user.target
@@ -360,44 +296,37 @@ sudo systemctl daemon-reload
 sudo systemctl enable ipfs-cluster
 ```
 
-### 2.5 Firewall openzetten
+### 10. Firewall openzetten
+
+De ArtBox-firewall heeft waarschijnlijk al poort 4001 open. De Cluster-Kubo gebruikt 4002
+— die moet ook open voor IPFS-netwerkverkeer. Cluster-gossip (9096) moet open naar de
+coordinator.
 
 ```bash
-# IPFS swarm (P2P verkeer)
-sudo ufw allow 4001/tcp
-sudo ufw allow 4001/udp
+# Cluster-Kubo swarm
+sudo ufw allow 4002/tcp
+sudo ufw allow 4002/udp
 
-# IPFS Cluster gossip (verbinding met coordinator en andere peers)
+# IPFS Cluster gossip
 sudo ufw allow 9096/tcp
 
-# Optioneel: beperk 9096 tot alleen de coordinator voor extra veiligheid
+# Optioneel: beperk 9096 tot alleen de coordinator
 # sudo ufw allow from <coordinator-ip> to any port 9096 proto tcp
 
-# Activeer firewall (alleen als SSH niet geblokkeerd wordt)
-sudo ufw allow 22/tcp
-sudo ufw --force enable
 sudo ufw status verbose
 ```
 
-**Router:** Zorg dat poort **4001** (TCP+UDP) en **9096** (TCP) worden doorgestuurd
-(port forwarding) naar het lokale IP van de Raspberry Pi.
-
-### 2.6 Starten en verifiëren
+### 11. Starten en testen
 
 ```bash
-# Herstart IPFS eerst (zodat de cluster op een verse API kan verbinden)
-sudo systemctl restart ipfs
-sleep 5
-
 # Start cluster
 sudo systemctl start ipfs-cluster
 
-# Bekijk logs
+# Volg de logs
 sudo journalctl -u ipfs-cluster -f
-# (Ctrl+C om te stoppen met loggen)
 ```
 
-Wacht tot je in de logs ziet dat de peer verbonden is. Controleer daarna:
+Wacht tot de peer verbonden is, test dan:
 
 ```bash
 # Check cluster peer ID
@@ -407,59 +336,72 @@ ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 id
 ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 peers ls
 ```
 
-Je zou nu **minimaal 2 peers** moeten zien: je eigen peer en de coordinator.
+Je zou **minimaal 2 peers** moeten zien: je eigen peer en de coordinator.
+
+### 12. Status van alle services
 
 ```bash
-# Check IPFS peer connectiviteit
-ipfs swarm peers | wc -l
-```
-
-### 2.7 Beide services samen controleren
-
-```bash
-# Status van beide
-sudo systemctl status ipfs ipfs-cluster
-
-# Automatisch starten bij boot?
-sudo systemctl is-enabled ipfs ipfs-cluster
+sudo systemctl status ipfs ipfs-cluster-ipfs ipfs-cluster
+sudo systemctl is-enabled ipfs ipfs-cluster-ipfs ipfs-cluster
 ```
 
 ---
 
-## Deel 3 — Wat gebeurt er nu?
+## Wat er nu draait
 
-Zodra de coordinator jouw peer ziet, worden de volgende stappen handmatig uitgevoerd:
+| Service | Functie | IPFS_PATH | API |
+|---|---|---|---|
+| `ipfs.service` | ArtBox-Kubo (privé-CIDs) | `/opt/ipfs-data/ipfs` | 5001 |
+| `ipfs-cluster-ipfs.service` | Cluster-Kubo (Cluster-CIDs) | `/opt/ipfs-data/cluster-ipfs` | 5002 |
+| `ipfs-cluster.service` | Cluster volunteer | `/opt/ipfs-data/cluster` | 9094 |
 
-1. **Coordinator verhoogt replicatie** met `scripts/rebalance.sh` → CIDs worden
-   verdeeld over jouw node en de coordinator (min replicatie = 2)
-2. **Je node begint automatisch met downloaden** van de toegewezen CIDs
-3. **Voortgang is live te zien** op het dashboard: **[https://glimmy.xyz](https://glimmy.xyz)**
-
-Je hoeft zelf niets te doen — het cluster regelt de distributie.
+De ArtBox-eigenaar beheert zijn eigen CIDs via poort 5001. Cluster beheert gedeelde CIDs
+via de Cluster-Kubo op poort 5002. Ze kunnen elkaar niet in de weg zitten.
 
 ---
 
-## Deel 4 — Dagelijks beheer
+## Wat er nu gebeurt
+
+Zodra de coordinator jouw peer ziet, kun je het cluster laten uitbreiden:
+
+1. **Coordinator verhoogt replicatie** → CIDs worden verdeeld over jouw node
+2. **Jouw Cluster-Kubo begint met downloaden** van toegewezen CIDs
+3. **Voortgang is te zien** op het dashboard
+
+De ArtBox blijft onaangeroerd — geen enkele pin van de eigenaar wordt geraakt.
+
+---
+
+## Resource-gebruik
+
+Twee Kubo-daemons naast elkaar kost extra geheugen. Op een Raspberry Pi 4:
+
+| Service | RAM (rustig) | RAM (actief) |
+|---|---|---|
+| ArtBox-Kubo | ~200 MB | ~400 MB |
+| Cluster-Kubo | ~200 MB | ~400 MB |
+| IPFS Cluster | ~50 MB | ~100 MB |
+| **Totaal** | **~450 MB** | **~900 MB** |
+
+Een 4GB Raspberry Pi heeft voldoende headroom. Bij 8GB is er geen enkel probleem.
+
+Schijfruimte: Cluster-CIDs worden gedownload naar `/opt/ipfs-data/cluster-ipfs`. Houd
+hier rekening mee bij de partitiegrootte.
+
+---
+
+## Dagelijks gebruik
 
 ```bash
-# Status van je node
+# ArtBox status
 ipfs-tools status
 
-# Cluster status (welke CIDs host je?)
+# Cluster status — welke CIDs host je?
 ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 status
 
-# Hoeveel schijfruimte gebruik je?
-du -sh /opt/ipfs-data/ipfs
-df -h /opt/ipfs-data
-
-# SSD gezondheid
-ipfs-tools ssd-health
-
-# Backup maken
-sudo ipfs-tools backup
-
-# Logs bekijken
+# Logs
 sudo journalctl -u ipfs -n 50 --no-pager
+sudo journalctl -u ipfs-cluster-ipfs -n 50 --no-pager
 sudo journalctl -u ipfs-cluster -n 50 --no-pager
 ```
 
@@ -467,16 +409,7 @@ sudo journalctl -u ipfs-cluster -n 50 --no-pager
 
 ## Troubleshooting
 
-### "ipfs-cluster-service: command not found"
-Controleer of de binary op de juiste plek staat:
-```bash
-ls -la /usr/local/bin/ipfs-cluster-*
-```
-Zo niet, herhaal stap 2.1.
-
 ### Cluster start niet: "secret mismatch"
-De `CLUSTER_SECRET` in je `service.json` moet **exact** hetzelfde zijn als die van
-de coordinator. Vraag de coordinator om bevestiging en pas aan:
 ```bash
 sudo -u ipfs bash -c '
   export IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
@@ -485,46 +418,24 @@ sudo -u ipfs bash -c '
 sudo systemctl restart ipfs-cluster
 ```
 
-### "Cannot connect to IPFS API"
-IPFS draait niet of de API is niet bereikbaar op `127.0.0.1:5001`:
+### Cluster-Kubo API niet bereikbaar
 ```bash
-sudo systemctl status ipfs
-curl http://127.0.0.1:5001/api/v0/version
+sudo systemctl status ipfs-cluster-ipfs
+curl http://127.0.0.1:5002/api/v0/version
 ```
-Als IPFS niet draait: `sudo systemctl restart ipfs`
+
+Als de Cluster-Kubo niet draait: `sudo systemctl restart ipfs-cluster-ipfs`
 
 ### Peer verschijnt niet op het dashboard
-1. Check of poort 9096 open is vanuit het internet
-2. Check of de coordinator bereikbaar is: `nc -zv <coordinator-ip> 9096`
-3. Check logs: `sudo journalctl -u ipfs-cluster -n 100 --no-pager | grep -i error`
-
-### Geen peers in IPFS swarm
-Controleer of poort 4001 open is (zowel op de Pi als in je router):
 ```bash
-sudo ufw status | grep 4001
-ss -tuln | grep 4001
+sudo journalctl -u ipfs-cluster -n 100 --no-pager | grep -i error
+nc -zv <coordinator-ip> 9096
 ```
 
-### Te weinig schijfruimte
-Pas de storage limiet aan:
+### ArtBox-Kubo en Cluster-Kubo swarm poorten
+Controleer of beide poorten open zijn:
+
 ```bash
-sudo -u ipfs ipfs config Datastore.StorageMax "100GB"
-sudo systemctl restart ipfs ipfs-cluster
+sudo ufw status | grep -E '4001|4002'
+ss -tuln | grep -E '4001|4002'
 ```
-
----
-
-## Samenvatting
-
-Na deze setup heb je:
-
-| Component | Locatie | Status |
-|-----------|---------|--------|
-| IPFS (Kubo) | systemd `ipfs.service` | ✅ Draait |
-| IPFS Cluster peer | systemd `ipfs-cluster.service` | ✅ Verbonden met coordinator |
-| ArtBox tools | `/usr/local/bin/ipfs-tools` | ✅ Beschikbaar |
-| Data | `/opt/ipfs-data/` op SSD | ✅ Geoptimaliseerd |
-| Firewall | ufw, poorten 4001+9096 open | ✅ Actief |
-
-Je Pi is nu een actieve volunteer in het CyberWatch cluster en host automatisch
-een deel van de 111+ curated CIDs.
