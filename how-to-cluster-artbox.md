@@ -49,8 +49,9 @@ IPFS Cluster ──> same Kubo API ──> same pinset
 
 Kubo cannot tell the difference between a pin placed by the ArtBox owner and a pin placed
 by Cluster. When Cluster removes a CID from the shared pinset (e.g. during rebalancing),
-it can unpin a local ArtBox pin. `follower_mode=true` does not prevent this — it only
-prevents the volunteer from *initiating* pinset changes itself.
+it can unpin a local ArtBox pin. The `trusted_peers` + `pin_only_on_trusted_peers`
+configuration prevents the volunteer from *initiating* pinset changes itself, but the
+coordinator can still rebalance CIDs assigned to this peer.
 
 A separate Cluster-Kubo is the only guarantee that ArtBox CIDs will never disappear due
 to Cluster action.
@@ -140,7 +141,8 @@ sudo -u ipfs bash -c '
   ipfs config Datastore.StorageGCWatermark 85
   ipfs config Datastore.GCPeriod "1h"
   ipfs config Routing.Type "dhtclient"
-  ipfs config Reprovider.Interval "0"  # Cluster does not republish
+  ipfs config Reprovider.Interval "0"  # deprecated in v0.33+; use Provide.Strategy "pinned" instead
+  ipfs config Provide.Strategy "pinned"  # only announce cluster CIDs, not the whole repo
 
   # API on a different port than the ArtBox-Kubo
   ipfs config Addresses.API "/ip4/127.0.0.1/tcp/5002"
@@ -236,11 +238,11 @@ COORDINATOR_PEER_ID="<coordinator-peer-id>"
 CLUSTER_PEERNAME="artbox-pi-jan"
 COORDINATOR_IP="<coordinator-ip>"
 
-# 1. Cluster secret
-ipfs-cluster-service config set secret "${CLUSTER_SECRET}"
+# In v1.1.6, config set subcommand does not exist. Edit service.json directly.
+sed -i "s|\"secret\":.*|\"secret\": \"${CLUSTER_SECRET}\",|" service.json
 
 # 2. Peer name
-ipfs-cluster-service config set peername "${CLUSTER_PEERNAME}"
+sed -i "s|\"peername\":.*|\"peername\": \"${CLUSTER_PEERNAME}\",|" service.json
 
 # 3. REST API over HTTP (for local status checks)
 sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
@@ -249,15 +251,14 @@ sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
 sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5002|" service.json
 
 # 5. Bootstrap to the coordinator
-ipfs-cluster-service config set cluster.bootstrap "[
-  \"/ip4/${COORDINATOR_IP}/tcp/9096/p2p/${COORDINATOR_PEER_ID}\"
-]"
+sed -i "s|\"bootstrap\":.*|\"bootstrap\": [\"/ip4/${COORDINATOR_IP}/tcp/9096/p2p/${COORDINATOR_PEER_ID}\"],|" service.json
 
-# 6. Follower mode
-ipfs-cluster-service config set follower_mode true
+# 6. Trusted-peers enforcement: only the coordinator may modify the pinset
+sed -i "s|\"trusted_peers\":.*|\"trusted_peers\": [\"${COORDINATOR_PEER_ID}\"],|" service.json
+sed -i "s|\"pin_only_on_trusted_peers\":.*|\"pin_only_on_trusted_peers\": true,|" service.json
 
-# NOTE: follower_mode only prevents THIS node from initiating pinset
-# changes. It does NOT prevent the coordinator from unpinning CIDs
+# NOTE: trusted_peers restricts pinset writes to the coordinator at the
+# protocol level. It does NOT prevent the coordinator from unpinning CIDs
 # assigned to this volunteer, which is why we use a separate Kubo.
 '
 ```
@@ -439,7 +440,8 @@ sudo journalctl -u ipfs-cluster -n 50 --no-pager
 ```bash
 sudo -u ipfs bash -c '
   export IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
-  ipfs-cluster-service config set secret "<CORRECT_SECRET>"
+  # In v1.1.6, config set subcommand does not exist. Edit service.json directly.
+  sed -i "s|\"secret\":.*|\"secret\": \"<CORRECT_SECRET>\",|" service.json
 '
 sudo systemctl restart ipfs-cluster
 ```

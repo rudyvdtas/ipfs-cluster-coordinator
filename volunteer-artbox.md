@@ -28,8 +28,9 @@ on port 5002 with its own peer ID and own repository.
 
 Kubo cannot tell the difference between an ArtBox pin and a Cluster pin.
 If the cluster rebalances and unpins a CID, it could remove an ArtBox pin.
-`follower_mode=true` does not prevent this — it only prevents the volunteer
-from *initiating* pinset changes itself.
+The `trusted_peers` + `pin_only_on_trusted_peers` configuration prevents the
+volunteer from *initiating* pinset changes itself, but the coordinator can
+still rebalance CIDs assigned to this peer.
 
 A separate Cluster-Kubo is the only guarantee that ArtBox CIDs never disappear.
 
@@ -163,15 +164,20 @@ sudo -u ipfs bash -c '
   CLUSTER_PEERNAME="artbox-pi-jan"
   COORDINATOR_IP="149.210.143.16"
 
-  ipfs-cluster-service config set secret "$CLUSTER_SECRET"
-  ipfs-cluster-service config set peername "$CLUSTER_PEERNAME"
-  ipfs-cluster-service config set follower_mode true
+  # In v1.1.6, config set subcommand does not exist. Edit service.json directly.
+  sed -i "s|\"secret\":.*|\"secret\": \"$CLUSTER_SECRET\",|" service.json
+  sed -i "s|\"peername\":.*|\"peername\": \"$CLUSTER_PEERNAME\",|" service.json
+  COORDINATOR_PEER_ID="12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd"
+
+  # Trusted-peers enforcement: only the coordinator may modify the pinset
+  sed -i "s|\"trusted_peers\":.*|\"trusted_peers\": [\"$COORDINATOR_PEER_ID\"],|" service.json
+  sed -i "s|\"pin_only_on_trusted_peers\":.*|\"pin_only_on_trusted_peers\": true,|" service.json
 
   # Point to Cluster-Kubo (port 5002), NOT the ArtBox-Kubo (5001)
   sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5002|" service.json
   sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
 
-  ipfs-cluster-service config set cluster.bootstrap "[\"/ip4/$COORDINATOR_IP/tcp/9096/p2p/$COORDINATOR_PEER_ID\"]"
+  sed -i "s|\"bootstrap\":.*|\"bootstrap\": [\"/ip4/$COORDINATOR_IP/tcp/9096/p2p/$COORDINATOR_PEER_ID\"],|" service.json
 '
 ```
 

@@ -36,7 +36,7 @@ lost dit op (mits de deployment tool het niet strip):
 ### Functionaliteit
 
 - 105 van 110 CIDs gepind in de cluster (5 errors onbekend)
-- Coordinator/vrijwilliger rollenscheiding via `CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID}` (alleen coordinator produceert pinset-operaties) + `CLUSTER_FOLLOWERMODE=true` op vrijwilligers
+- Coordinator/vrijwilliger rollenscheiding via `CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID}` (alleen coordinator produceert pinset-operaties) + `trusted_peers` / `pin_only_on_trusted_peers` op vrijwilligers
 - Dashboard toont peers, pin-status per CID, toggle CID lijst
 - REST API op intern netwerk `cluster-internal` (niet publiek)
 - Sync-script in repo (`scripts/sync-cids.sh`) om CID lijst te laden
@@ -222,7 +222,7 @@ vanuit die directory om CIDs te pinnen.
 `CLUSTER_CRDT_TRUSTEDPEERS=${COORDINATOR_PEER_ID}` in docker-compose zorgt dat
 alleen de coordinator CRDT pinset-operaties produceert. Vrijwilligers ontvangen
 en passen de updates toe maar kunnen zelf geen pinset-wijzigingen initiëren.
-`CLUSTER_FOLLOWERMODE=true` op vrijwilligers is een extra lokale beveiligingslaag.
+`trusted_peers` + `pin_only_on_trusted_peers` op vrijwilligers is een extra lokale beveiligingslaag.
 Vrijwilligers hebben alleen nodig:
 
 - `CLUSTER_SECRET` — hex string uit `service.json`
