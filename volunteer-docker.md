@@ -46,12 +46,15 @@ Fill in the following fields:
 CLUSTER_SECRET=<the secret the coordinator shared with you>
 CLUSTER_PEERNAME=choose-a-unique-name
 COORDINATOR_PEER_ID=12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd
-CLUSTER_FOLLOWERMODE=true
 IPFS_STORAGE_MAX=200GB
 BOOTSTRAP_PEERS=/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd
 # Only needed if you are behind NAT — set to your public or Tailscale IP:
 # CLUSTER_PEER_ADDRESSES=/ip4/<your-public-or-tailscale-ip>/tcp/9096
 ```
+
+> `COORDINATOR_PEER_ID` is the coordinator's peer ID. It enables the cluster
+> to restrict pinset writes to the coordinator only via CRDT trusted peers.
+> Volunteers receive allocations and host content but cannot add or remove CIDs.
 
 ### 4. Open the firewall
 

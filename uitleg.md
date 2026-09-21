@@ -18,9 +18,10 @@ vervolgens **automatisch** welke peers elk CID daadwerkelijk opslaan
 via de replicatiefactor. Vrijwilligers hoeven niets te kiezen — zij
 ontvangen allocaties en hosten de content.
 
-Vrijwillige peers draaien in **follower mode** (`CLUSTER_FOLLOWERMODE=true`).
-Hierdoor zijn pin/unpin-operaties op de vrijwilliger lokaal uitgeschakeld.
-Alleen de coordinator kan de pinset wijzigen.
+Vrijwillige peers draaien met een **trusted-peer configuratie**
+(`CLUSTER_CRDT_TRUSTEDPEERS`). Hierdoor zijn pin/unpin-operaties op de
+vrijwilliger lokaal uitgeschakeld. Alleen de coordinator kan de pinset
+wijzigen.
 
 ## Voorwaarden (vrijwilliger)
 
@@ -73,7 +74,7 @@ cp .env.example .env
 |-----------|--------|
 | `CLUSTER_SECRET` | **Hetzelfde** secret als de coordinator — wordt privé gedeeld, nooit in Git of publieke kanalen |
 | `COORDINATOR_PEER_ID` | Peer-ID van de coordinator |
-| `CLUSTER_FOLLOWERMODE` | Zet op `true` voor vrijwilligers — schakelt pin/unpin lokaal uit |
+| `COORDINATOR_PEER_ID` | Peer-ID van de coordinator — wordt gebruikt om trusted-peers configuratie in te stellen zodat alleen de coordinator de pinset kan wijzigen |
 | `CLUSTER_PEERNAME` | Unieke naam voor deze peer, bijv. `peer-fra-2` |
 | `BOOTSTRAP_PEERS` | `/ip4/<coordinator-ip>/tcp/9096/p2p/<coordinator-peer-id>` |
 

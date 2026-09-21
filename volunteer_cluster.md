@@ -15,7 +15,8 @@ the fewest replicas, so new volunteers immediately improve overall redundancy.
 **Trust model:** Volunteers join after the coordinator shares the cluster secret
 and bootstrap address — there is no open sign-up. The secret is the access gate.
 
-Your peer runs in **follower mode** (`CLUSTER_FOLLOWERMODE=true`), which means
+Your peer runs with a **trusted-peer configuration** that restricts pinset
+writes to the coordinator (`CLUSTER_CRDT_TRUSTEDPEERS`), which means
 you can join the cluster, receive allocations, and host content, but local pin
 and unpin operations are **technically disabled**. Only the coordinator can
 manage the pinset.
@@ -75,7 +76,6 @@ Fill in the following fields:
 CLUSTER_SECRET=<the secret the coordinator shared with you>
 CLUSTER_PEERNAME=choose-a-unique-name         # e.g. "jan-vps" — for identification only
 COORDINATOR_PEER_ID=12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd
-CLUSTER_FOLLOWERMODE=true                     # volunteer peers run in follower mode — cannot add/remove pins
 IPFS_STORAGE_MAX=200GB                         # how much you want to contribute; leave empty for 4TB default
 BOOTSTRAP_PEERS=/ip4/149.210.143.16/tcp/9096/p2p/12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd
 # Only needed if you are behind NAT (home network, Docker Desktop, etc.).
@@ -170,12 +170,13 @@ added by the coordinator via `curated-cids.json` commits; you can watch the
 repository for changes.
 
 **Can volunteers add or remove CIDs?**
-No. Volunteer peers run with `CLUSTER_FOLLOWERMODE=true`, which disables
-local pin and unpin operations at the protocol level (`ipfs-cluster-ctl pin
-add/rm` will return "Write operations are disabled"). The coordinator is the
-only peer allowed to manage the pinset. The cluster handles all allocation
-automatically and the coordinator's `curated-cids.json` + `sync-cids.sh`
-workflow is the single source of truth.
+No. Volunteer peers use a trusted-peer configuration (`trusted_peers` +
+`pin_only_on_trusted_peers`) that restricts pinset writes to the coordinator
+at the protocol level (`ipfs-cluster-ctl pin add/rm` will return "Write
+operations are disabled"). The coordinator is the only peer allowed to manage
+the pinset. The cluster handles all allocation automatically and the
+coordinator's `curated-cids.json` + `sync-cids.sh` workflow is the single
+source of truth.
 
 ## Questions?
 

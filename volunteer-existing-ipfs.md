@@ -15,9 +15,10 @@ Your existing Kubo node
         └── Cluster gossip: 9096
 ```
 
-**Why no separate Kubo?** Your existing node is sufficient. Follower mode
-(`CLUSTER_FOLLOWERMODE=true`) prevents the cluster from unpinning your
-personal CIDs — the cluster can only add allocations to the existing pinset.
+**Why no separate Kubo?** Your existing node is sufficient. The cluster uses
+`CLUSTER_CRDT_TRUSTEDPEERS` to restrict pinset writes to the coordinator;
+volunteers receive allocations and host content but cannot modify the pinset.
+The cluster can only add allocations to the existing pinset.
 
 ## Requirements
 
@@ -77,7 +78,10 @@ COORDINATOR_IP="149.210.143.16"
 
 ipfs-cluster-service config set secret "$CLUSTER_SECRET"
 ipfs-cluster-service config set peername "$CLUSTER_PEERNAME"
-ipfs-cluster-service config set follower_mode true
+
+# Trusted-peers enforcement: only the coordinator may modify the pinset
+sed -i "s|\"trusted_peers\":.*|\"trusted_peers\": [\"$COORDINATOR_PEER_ID\"],|" service.json
+sed -i "s|\"pin_only_on_trusted_peers\":.*|\"pin_only_on_trusted_peers\": true,|" service.json
 
 # Point to your Kubo API (change port if yours is different)
 sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5001|" service.json
@@ -136,8 +140,9 @@ You should see at least 2 peers: your own peer and the coordinator.
 ## FAQ
 
 **Can the cluster remove my own pins?**
-No, because `follower_mode=true` disables pinset changes at this level.
-The cluster can only add allocations. Your own CIDs stay untouched.
+No. The cluster coordination via `CLUSTER_CRDT_TRUSTEDPEERS` ensures only the
+coordinator can modify the pinset. The cluster can only add allocations.
+Your own CIDs stay untouched.
 
 **Which ports does the cluster use?**
 - `9096`: cluster gossip (must be open to the coordinator)
