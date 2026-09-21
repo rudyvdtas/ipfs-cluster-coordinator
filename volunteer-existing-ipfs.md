@@ -1,51 +1,51 @@
 # Volunteer — IPFS node + Cluster
 
-Voeg IPFS Cluster toe naast een **bestaande, draaiende Kubo-node**.
-Je eigen IPFS-node blijft gewoon werken; de cluster gebruikt jouw Kubo-API
-voor het beheren van de toegewezen CIDs.
+Add IPFS Cluster alongside an **existing, running Kubo node**.
+Your own IPFS node keeps working; the cluster uses your Kubo API
+for managing assigned CIDs.
 
-## Architectuur
+## Architecture
 
 ```
-Jouw bestaande Kubo node
-└── API op poort 5001
+Your existing Kubo node
+└── API on port 5001
     └── IPFS Cluster (systemd service)
-        ├── gebruikt jouw Kubo API
+        ├── uses your Kubo API
         ├── Cluster REST API: 9094
         └── Cluster gossip: 9096
 ```
 
-**Waarom geen aparte Kubo?** Jouw bestaande node is voldoende. Follower mode
-(`CLUSTER_FOLLOWERMODE=true`) voorkomt dat de cluster jouw eigen pins kan
-verwijderen — de cluster kan alleen allocaties toevoegen aan de bestaande pinset.
+**Why no separate Kubo?** Your existing node is sufficient. Follower mode
+(`CLUSTER_FOLLOWERMODE=true`) prevents the cluster from unpinning your
+personal CIDs — the cluster can only add allocations to the existing pinset.
 
 ## Requirements
 
-- Een draaiende Kubo node (systemd, Docker, of manual)
-- Extra ~100 MB RAM voor de cluster service
-- Minstens 50 GB vrije schijfruimte voor cluster-allocaties
-- Poort `9096` (TCP) open naar de coordinator
-- `ipfs-cluster-service` en `ipfs-cluster-ctl` binaries
+- A running Kubo node (systemd, Docker, or manual)
+- Extra ~100 MB RAM for the cluster service
+- At least 50 GB free disk space for cluster allocations
+- Port `9096` (TCP) open to the coordinator
+- `ipfs-cluster-service` and `ipfs-cluster-ctl` binaries
 
-## Stap voor stap
+## Step by step
 
-### 1. Check je bestaande Kubo
+### 1. Check your existing Kubo
 
 ```bash
 ipfs id
 curl http://127.0.0.1:5001/api/v0/version
 ```
 
-Noteer het poortnummer (default 5001).
+Note the port number (default 5001).
 
-### 2. Download de cluster binaries
+### 2. Download the cluster binaries
 
-Gebruik dezelfde versie als de coordinator (check met
+Use the same version as the coordinator (check with
 `docker exec cluster ipfs-cluster-service --version`):
 
 ```bash
 CLUSTER_VERSION="1.1.6"
-ARCH="linux-arm64"   # of linux-amd64
+ARCH="linux-arm64"   # or linux-amd64
 
 wget "https://dist.ipfs.tech/ipfs-cluster-service/v$CLUSTER_VERSION/ipfs-cluster-service_v$CLUSTER_VERSION_$ARCH.tar.gz"
 tar -xzf "ipfs-cluster-service_v$CLUSTER_VERSION_$ARCH.tar.gz"
@@ -56,7 +56,7 @@ rm -rf ipfs-cluster-service *.tar.gz
 ipfs-cluster-service --version
 ```
 
-### 3. Initialiseer de cluster config
+### 3. Initialize the cluster config
 
 ```bash
 sudo mkdir -p /opt/ipfs-data/cluster
@@ -65,7 +65,7 @@ export IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
 ipfs-cluster-service init --consensus crdt
 ```
 
-### 4. Configureer de cluster peer
+### 4. Configure the cluster peer
 
 ```bash
 export IPFS_CLUSTER_PATH=/opt/ipfs-data/cluster
@@ -79,17 +79,17 @@ ipfs-cluster-service config set secret "$CLUSTER_SECRET"
 ipfs-cluster-service config set peername "$CLUSTER_PEERNAME"
 ipfs-cluster-service config set follower_mode true
 
-# Wijs naar jouw Kubo API (verander poort als je een andere gebruikt)
+# Point to your Kubo API (change port if yours is different)
 sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5001|" service.json
 
-# Zet REST API op plain HTTP
+# Enable plain HTTP for the REST API
 sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
 
-# Stel bootstrap in naar de coordinator
+# Set bootstrap to the coordinator
 ipfs-cluster-service config set cluster.bootstrap "[\"/ip4/$COORDINATOR_IP/tcp/9096/p2p/$COORDINATOR_PEER_ID\"]"
 ```
 
-### 5. Maak een systemd service
+### 5. Create a systemd service
 
 ```bash
 sudo tee /etc/systemd/system/ipfs-cluster.service << 'EOF'
@@ -114,7 +114,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable ipfs-cluster
 ```
 
-### 6. Open de firewall en start
+### 6. Open the firewall and start
 
 ```bash
 sudo ufw allow 9096/tcp
@@ -122,23 +122,23 @@ sudo systemctl start ipfs-cluster
 sudo journalctl -u ipfs-cluster -f
 ```
 
-### 7. Verifieer de verbinding
+### 7. Verify the connection
 
 ```bash
 ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 id
 ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 peers ls
 ```
 
-Je zou minstens 2 peers moeten zien: je eigen peer en de coordinator.
+You should see at least 2 peers: your own peer and the coordinator.
 
 ---
 
-## Veelgestelde vragen
+## FAQ
 
-**Kan de cluster mijn eigen pins verwijderen?**
-Nee, want `follower_mode=true` schakelt pinset-wijzigingen uit op dit niveau.
-De cluster kan alleen allocaties toevoegen. Jouw eigen CIDs blijven onaangetast.
+**Can the cluster remove my own pins?**
+No, because `follower_mode=true` disables pinset changes at this level.
+The cluster can only add allocations. Your own CIDs stay untouched.
 
-**Welke poort gebruikt de cluster?**
-- `9096`: cluster gossip (moet open naar de coordinator)
-- `9094`: cluster REST API (alleen lokaal)
+**Which ports does the cluster use?**
+- `9096`: cluster gossip (must be open to the coordinator)
+- `9094`: cluster REST API (local only)

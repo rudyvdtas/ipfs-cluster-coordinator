@@ -1,66 +1,66 @@
 # Volunteer — Cluster + Artbox
 
-Voeg een IPFS Cluster volunteer toe aan een **bestaande ArtBox** met Kubo.
-De ArtBox-eigenaar wil gegarandeerd dat eigen pins onaangetast blijven.
+Add an IPFS Cluster volunteer to an **existing ArtBox** with Kubo.
+The ArtBox owner needs a guarantee that their personal pins stay untouched.
 
-De oplossing is een **tweede, aparte Kubo instance** voor de cluster.
-Cluster-CIDs en ArtBox-CIDs raken elkaar nooit.
+The solution is a **second, separate Kubo instance** for the cluster.
+Cluster CIDs and ArtBox CIDs never touch each other.
 
-## Architectuur
+## Architecture
 
 ```
 ArtBox Raspberry Pi
 │
 ├── ipfs.service (ArtBox-Kubo)
-│   └── eigenaar's private CIDs (poort 5001, IPFS_PATH=/opt/ipfs-data/ipfs)
+│   └── owner's private CIDs (port 5001, IPFS_PATH=/opt/ipfs-data/ipfs)
 │
 ├── ipfs-cluster-ipfs.service (Cluster-Kubo)
-│   └── cluster-CIDs alleen (poort 5002, IPFS_PATH=/opt/ipfs-data/cluster-ipfs)
+│   └── cluster CIDs only (port 5002, IPFS_PATH=/opt/ipfs-data/cluster-ipfs)
 │
 └── ipfs-cluster.service
-    └── gebruikt Cluster-Kubo API (5002), gossip op 9096
+    └── uses Cluster-Kubo API (5002), gossip on 9096
 ```
 
-De cluster praat **nooit** met de ArtBox-Kubo. Het gebruikt een eigen Kubo
-op poort 5002 met een eigen peer-ID en eigen repository.
+The cluster **never** talks to the ArtBox-Kubo. It uses its own Kubo
+on port 5002 with its own peer ID and own repository.
 
-### Waarom niet de ArtBox-Kubo herbruiken?
+### Why not reuse the ArtBox-Kubo?
 
-Kubo kan geen onderscheid maken tussen een pin van de ArtBox-eigenaar en
-een pin van de cluster. Als de cluster tijdens herbeweging een CID unpint,
-kan dat een ArtBox-pin verwijderen. `follower_mode=true` voorkomt dit niet —
-het voorkomt alleen dat de vrijwilliger zelf pinset-wijzigingen *start*.
+Kubo cannot tell the difference between an ArtBox pin and a Cluster pin.
+If the cluster rebalances and unpins a CID, it could remove an ArtBox pin.
+`follower_mode=true` does not prevent this — it only prevents the volunteer
+from *initiating* pinset changes itself.
 
-Een aparte Cluster-Kubo is de enige garantie dat ArtBox-CIDs nooit verdwijnen.
+A separate Cluster-Kubo is the only guarantee that ArtBox CIDs never disappear.
 
-## Requirements
+## Resource usage
 
-| Service | RAM (idle) | RAM (actief) |
+| Service | RAM (idle) | RAM (active) |
 |---------|-----------|-------------|
 | ArtBox-Kubo | ~200 MB | ~400 MB |
 | Cluster-Kubo | ~200 MB | ~400 MB |
 | IPFS Cluster | ~50 MB | ~100 MB |
-| **Totaal** | **~450 MB** | **~900 MB** |
+| **Total** | **~450 MB** | **~900 MB** |
 
-- Raspberry Pi 4 (4GB+) of beter
-- Minstens 50 GB vrije schijfruimte voor cluster-CIDs
-- Poorten `4002/tcp+udp` (Cluster-Kubo swarm) en `9096/tcp` (cluster gossip) open
-- `ipfs-cluster-service` en `ipfs-cluster-ctl` binaries
+- Raspberry Pi 4 (4GB+) or better
+- At least 50 GB free disk space for cluster CIDs
+- Ports `4002/tcp+udp` (Cluster-Kubo swarm) and `9096/tcp` (cluster gossip) open
+- `ipfs-cluster-service` and `ipfs-cluster-ctl` binaries
 
-## Stap voor stap
+## Step by step
 
-### 1. Check de bestaande ArtBox-Kubo
+### 1. Check the existing ArtBox-Kubo
 
 ```bash
 sudo systemctl status ipfs
 sudo -u ipfs ipfs config Path
 ```
 
-Bevestig dat het draait en noteer `IPFS_PATH` (meestal `/opt/ipfs-data/ipfs`).
+Confirm it is running and note the `IPFS_PATH` (typically `/opt/ipfs-data/ipfs`).
 
-### 2. Installeer een tweede Kubo (Cluster-Kubo)
+### 2. Install a second Kubo (Cluster-Kubo)
 
-Gebruik dezelfde versie als de ArtBox-Kubo:
+Use the same version as the ArtBox-Kubo:
 
 ```bash
 ARTBOX_KUBO_VERSION=$(/usr/local/bin/ipfs version | cut -d' ' -f3)
@@ -74,7 +74,7 @@ sudo bash install.sh
 cd .. && rm -rf kubo kubo_*.tar.gz
 ```
 
-### 3. Initialiseer de Cluster-Kubo (aparte repo)
+### 3. Initialize the Cluster-Kubo (separate repo)
 
 ```bash
 sudo -u ipfs mkdir -p /opt/ipfs-data/cluster-ipfs
@@ -84,9 +84,9 @@ sudo -u ipfs bash -c '
 '
 ```
 
-Dit krijgt een eigen peer-ID — normaal en verwacht.
+This gets its own peer ID — normal and expected.
 
-### 4. Configureer de Cluster-Kubo
+### 4. Configure the Cluster-Kubo
 
 ```bash
 sudo -u ipfs bash -c '
@@ -102,9 +102,9 @@ sudo -u ipfs bash -c '
 '
 ```
 
-Let op: aparte API poort (5002), aparte swarm poort (4002).
+Note: separate API port (5002), separate swarm port (4002).
 
-### 5. Maak de Cluster-Kubo systemd service
+### 5. Create the Cluster-Kubo systemd service
 
 ```bash
 sudo tee /etc/systemd/system/ipfs-cluster-ipfs.service << 'EOF'
@@ -133,7 +133,7 @@ sudo systemctl enable --now ipfs-cluster-ipfs
 curl http://127.0.0.1:5002/api/v0/version
 ```
 
-### 6. Installeer IPFS Cluster binaries
+### 6. Install IPFS Cluster binaries
 
 ```bash
 CLUSTER_VERSION="1.1.6"
@@ -148,7 +148,7 @@ rm -rf ipfs-cluster-service *.tar.gz
 ipfs-cluster-service --version
 ```
 
-### 7. Initialiseer en configureer de cluster
+### 7. Initialize and configure the cluster
 
 ```bash
 sudo mkdir -p /opt/ipfs-data/cluster
@@ -167,7 +167,7 @@ sudo -u ipfs bash -c '
   ipfs-cluster-service config set peername "$CLUSTER_PEERNAME"
   ipfs-cluster-service config set follower_mode true
 
-  # Wijs naar Cluster-Kubo (poort 5002), NIET de ArtBox-Kubo
+  # Point to Cluster-Kubo (port 5002), NOT the ArtBox-Kubo (5001)
   sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5002|" service.json
   sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
 
@@ -175,7 +175,7 @@ sudo -u ipfs bash -c '
 '
 ```
 
-### 8. Maak de cluster systemd service
+### 8. Create the cluster systemd service
 
 ```bash
 sudo tee /etc/systemd/system/ipfs-cluster.service << 'EOF'
@@ -211,7 +211,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable ipfs-cluster
 ```
 
-### 9. Open de firewall en start
+### 9. Open the firewall and start
 
 ```bash
 sudo ufw allow 4002/tcp
@@ -223,39 +223,39 @@ sudo systemctl start ipfs-cluster
 sudo journalctl -u ipfs-cluster -f
 ```
 
-### 10. Verifieer de setup
+### 10. Verify the setup
 
 ```bash
 # Cluster peer ID
 ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 id
 
-# Verbonden peers
+# Connected peers
 ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 peers ls
 
-# Alle 3 services draaien
+# All three services running
 sudo systemctl status ipfs ipfs-cluster-ipfs ipfs-cluster
 ```
 
-### 11. Bevestig isolatie
+### 11. Confirm isolation
 
 ```bash
-# ArtBox pins — deze zouden nooit mogen veranderen door cluster activiteit
+# ArtBox pins — these should never change due to cluster activity
 sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/ipfs ipfs pin ls
 
-# Cluster-Kubo identity (andere peer-ID dan ArtBox)
+# Cluster-Kubo identity (different peer ID from ArtBox)
 sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/cluster-ipfs ipfs id
 ```
 
 ---
 
-## Validatie checklist
+## Validation checklist
 
-| Check | Commando |
-|-------|----------|
-| ArtBox-Kubo peer-ID | `sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/ipfs ipfs id` |
-| Cluster-Kubo peer-ID | `sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/cluster-ipfs ipfs id` |
-| Cluster verbonden | `ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 peers ls` |
-| ArtBox pins ongewijzigd | `sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/ipfs ipfs pin ls` |
+| Check | Command |
+|-------|---------|
+| ArtBox-Kubo peer ID | `sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/ipfs ipfs id` |
+| Cluster-Kubo peer ID | `sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/cluster-ipfs ipfs id` |
+| Cluster connected | `ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 peers ls` |
+| ArtBox pins unchanged | `sudo -u ipfs env IPFS_PATH=/opt/ipfs-data/ipfs ipfs pin ls` |
 
-Zie de volledige ArtBox-gids op `how-to-cluster-artbox.md` voor meer details
-en troubleshooting.
+See the full ArtBox guide at `how-to-cluster-artbox.md` for more details
+and troubleshooting.
