@@ -164,8 +164,9 @@ sudo -u ipfs bash -c '
   CLUSTER_PEERNAME="artbox-pi-jan"
   COORDINATOR_IP="149.210.143.16"
 
-  ipfs-cluster-service config set secret "$CLUSTER_SECRET"
-  ipfs-cluster-service config set peername "$CLUSTER_PEERNAME"
+  # In v1.1.6, config set subcommand does not exist. Edit service.json directly.
+  sed -i "s|\"secret\":.*|\"secret\": \"$CLUSTER_SECRET\",|" service.json
+  sed -i "s|\"peername\":.*|\"peername\": \"$CLUSTER_PEERNAME\",|" service.json
   COORDINATOR_PEER_ID="12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd"
 
   # Trusted-peers enforcement: only the coordinator may modify the pinset
@@ -176,7 +177,7 @@ sudo -u ipfs bash -c '
   sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5002|" service.json
   sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
 
-  ipfs-cluster-service config set cluster.bootstrap "[\"/ip4/$COORDINATOR_IP/tcp/9096/p2p/$COORDINATOR_PEER_ID\"]"
+  sed -i "s|\"bootstrap\":.*|\"bootstrap\": [\"/ip4/$COORDINATOR_IP/tcp/9096/p2p/$COORDINATOR_PEER_ID\"],|" service.json
 '
 ```
 
