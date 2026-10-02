@@ -1,0 +1,38 @@
+# Voeg deze service toe aan je bestaande docker-compose.yml
+# Zorg dat de 'cluster' service en 'tracker' in hetzelfde network zitten.
+
+services:
+  tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile.tracker
+    restart: unless-stopped
+    environment:
+      # Cluster REST API — binnen het Docker network bereikbaar als http://cluster:9094
+      CLUSTER_API: "http://cluster:9094"
+      # Hoe vaak de pins gecheckt worden (seconden)
+      POLL_INTERVAL_SECONDS: "60"
+      # Aantal opeenvolgende errors voordat een CID als 'failed' wordt beschouwd
+      MAX_RETRIES: "5"
+      # Poort waarop de tracker zijn eigen API serveert
+      SERVE_PORT: "9095"
+      # Pad naar het state-bestand (binnen de container)
+      STATE_FILE: "/data/failed-cids.json"
+    volumes:
+      # State persisteren zodat je na een restart niet opnieuw begint te tellen
+      - tracker-data:/data
+    ports:
+      # Alleen nodig als je de tracker ook van buitenaf wil bereiken
+      # De monitor kan hem ook intern bereiken via http://tracker:9095
+      - "9095:9095"
+    depends_on:
+      - cluster
+    networks:
+      - cluster-internal
+
+volumes:
+  tracker-data:
+
+networks:
+  cluster-internal:
+    external: true

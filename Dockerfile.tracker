@@ -1,0 +1,7 @@
+# Minimal image — no extra dependencies needed (stdlib only)
+FROM python:3.12-alpine
+
+WORKDIR /app
+COPY track-failed-cids.py .
+
+CMD ["python3", "-u", "track-failed-cids.py"]
