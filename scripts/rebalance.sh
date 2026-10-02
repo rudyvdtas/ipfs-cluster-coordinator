@@ -4,20 +4,15 @@
 # Target replication: min=3, max=3 (or less when fewer peers are online).
 set -e
 
-CLUSTER_CTL="docker exec cluster ipfs-cluster-ctl"
+CN=$(docker ps --format '{{.Names}}' | grep -v tracker | grep cluster | head -1)
+[ -z "$CN" ] && { echo "Cluster container not found."; exit 1; }
+
+CLUSTER_CTL="docker exec $CN ipfs-cluster-ctl"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CID_FILE="${SCRIPT_DIR}/../curated-cids.json"
 
-PEER_COUNT=$(${CLUSTER_CTL} --enc json peers ls 2>/dev/null | python3 -c "
-import sys, json
-count = 0
-for line in sys.stdin:
-    line = line.strip()
-    if not line: continue
-    d = json.loads(line)
-    if isinstance(d, dict) and 'id' in d: count += 1
-print(count)
-" 2>/dev/null || echo 1)
+PEER_COUNT=$(${CLUSTER_CTL} id 2>/dev/null | sed -n 's/.*Sees \([0-9]*\) other peers.*/\1/p' || echo 0)
+PEER_COUNT=$((PEER_COUNT + 1))  # +1 voor zichzelf
 
 TARGET=$(python3 -c "print(min(3, ${PEER_COUNT}))")
 
@@ -58,4 +53,4 @@ echo ""
 echo "--- Rebalance complete ---"
 echo "Total CIDs: ${TOTAL}"
 echo "Errors:     ${ERRORS}"
-echo "Run 'docker exec cluster ipfs-cluster-ctl status' to verify."
+echo "Run 'docker exec $CN ipfs-cluster-ctl status' to verify."
