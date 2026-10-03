@@ -309,6 +309,16 @@ met geldig Let's Encrypt-certificaat en echte clusterdata. Downtime tijdens de
 cutover: enkele minuten (de tijd tussen het stoppen van de oude dashboard-container
 en het live zetten van Caddy + de systemd-monitor).
 
+**Fase 5 (afgerond, 3 okt 2026):** Coolify volledig verwijderd (containers, eigen
+volumes, `/data/coolify`) — vervroegd op expliciet verzoek, i.p.v. de geadviseerde
+24-48u stabiliteitsperiode. Health-checks waren groen vlak voor uitvoering.
+Geverifieerd met een echte VPS-reboot: `cluster`/`ipfs`/`tracker` (Docker
+`restart: unless-stopped`) en `caddy`/`sveltekit-monitor` (systemd `enabled`)
+kwamen allebei automatisch terug, site direct bereikbaar met volledige clusterdata.
+
+**Resultaat:** beschikbaar geheugen 538Mi → 643Mi → **802Mi**, swap-gebruik
+215Mi → 332Mi → **107Mi**. Coolify-migratie hiermee volledig afgerond.
+
 ## ⚠️ Op te pakken NA volledige afronding van de Coolify-migratie: `/pins` schaalt niet
 
 **Status: nog niet opgelost — bewust uitgesteld tot Fase 5-7 van de Coolify-migratie
