@@ -308,3 +308,39 @@ gestart op 80/443. `https://glimmy.xyz` en `https://www.glimmy.xyz` geverifieerd
 met geldig Let's Encrypt-certificaat en echte clusterdata. Downtime tijdens de
 cutover: enkele minuten (de tijd tussen het stoppen van de oude dashboard-container
 en het live zetten van Caddy + de systemd-monitor).
+
+## ⚠️ Op te pakken NA volledige afronding van de Coolify-migratie: `/pins` schaalt niet
+
+**Status: nog niet opgelost — bewust uitgesteld tot Fase 5-7 van de Coolify-migratie
+klaar zijn.** Dit is een apart, structureel probleem, losstaand van Coolify/Docker/
+systemd — het bestond al daarvoor en wordt alleen maar erger naarmate de pinset groeit.
+
+**Bevinding (3 okt 2026, live gereproduceerd):** `GET /pins` doet géén lokale lookup,
+maar een **synchrone broadcast naar alle peers** (`PinTracker.StatusAll`) om van elke
+peer — inclusief externe vrijwilligers over het internet — de actuele pin-status op
+te halen, en wacht op alle antwoorden voor de respons wordt samengesteld. Met 3336+
+CIDs en meerdere (soms trage/NAT'te) externe peers duurt die ronde regelmatig langer
+dan de 30s-timeout van zowel de monitor als de tracker:
+
+```
+ERROR cluster  PinTracker.StatusAll aborted: context canceled
+ERROR cluster  error in broadcast response from <peer-id>: context canceled
+ERROR restapi  sending error response: 500: context canceled
+```
+
+Gemeten: payload groeide van 31MB → 38MB binnen hetzelfde uur (pinset groeit nog
+steeds). Eén poging lukte in 21s, andere overschreden de 30s-timeout en kregen een
+HTTP 500. **Zowel de monitor als de tracker ondervinden dit onafhankelijk van elkaar**
+— dit is dus niet opgelost door de Coolify-migratie en zal bij een nog grotere pinset
+(richting de resterende CIDs die nog ge-upload moeten worden) alleen maar vaker
+voorkomen.
+
+**Te onderzoeken zodra de Coolify-migratie (Fase 5-7) is afgerond:**
+- Bestaat er een `?local=true`-achtige query-parameter op `/pins` of `/pins/{cid}`
+  die de cluster-wide broadcast overslaat en alleen lokaal bekende status teruggeeft?
+- Kan de monitor/tracker volstaan met een lichtere endpoint (bv. alleen CID-lijst +
+  lokale status) in plaats van de volledige cross-peer statusronde bij elke poll?
+- Gedeelde rate-limiting/caching tussen monitor én tracker, zodat niet twee
+  onafhankelijke processen elk hun eigen volledige broadcast-ronde triggeren.
+- Eventueel de timeout verhogen als tijdelijke lapmiddel — lost de onderliggende
+  schaalbaarheid niet op, maar kan acute 500's verminderen.
