@@ -9,6 +9,10 @@ After MAX_RETRIES errors: unpins the CID and adds it to the failed list.
 Endpoints:
   GET  /failed-cids        → JSON array of failed CIDs
   GET  /status             → error_counts + failed_count (debug)
+  GET  /summary            → cached aggregate pin-status counts (pinned/pinning/
+                              queued/error/pin_count), computed once per poll —
+                              never triggers a live cluster broadcast, safe to
+                              call as often as needed regardless of pinset size.
   GET  /healthz            → {"status": "ok"}
   DELETE /failed-cids/{cid} → remove from failed list (manual retry)
 """
@@ -40,6 +44,7 @@ ERROR_STATUSES = {"pin_error", "error", "cluster_error", "remote_pin_error"}
 state_lock   = threading.Lock()
 error_counts = {}   # cid → consecutive error count
 failed_cids  = set() # permanently failed CIDs
+summary      = {}   # cached aggregate counts, computed once per poll (see poll_loop)
 
 # ---------------------------------------------------------------------------
 # Persistence
@@ -53,6 +58,7 @@ def load_state():
             data = json.load(f)
         failed_cids.update(data.get("failed", []))
         error_counts.update(data.get("error_counts", {}))
+        summary.update(data.get("summary", {}))
         print(f"[tracker] Loaded state: {len(failed_cids)} failed, "
               f"{len(error_counts)} in-progress", flush=True)
     except Exception as e:
@@ -68,6 +74,7 @@ def save_state():
             json.dump({
                 "failed":       sorted(failed_cids),
                 "error_counts": dict(error_counts),
+                "summary":      dict(summary),
                 "updated":      time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }, f, indent=2)
         os.replace(tmp, STATE_FILE)
@@ -151,12 +158,27 @@ def poll_loop():
         with state_lock:
             to_fail = []   # CIDs to unpin this round (avoid mutating set while iterating)
 
+            # Aggregate counts for the /summary endpoint — computed in this same
+            # pass over `pins` so a 200K-CID pinset is only iterated once per poll.
+            counts = {"pinned": 0, "pinning": 0, "queued": 0, "error": 0}
+
             for pin in pins:
                 cid = _cid_str(pin.get("cid", ""))
+                peer_map = pin.get("peer_map", {})
+
+                for info in peer_map.values():
+                    status = info.get("status", "")
+                    if status == "pinned":
+                        counts["pinned"] += 1
+                    elif status == "pinning":
+                        counts["pinning"] += 1
+                    elif status in ("queued", "pin_queued"):
+                        counts["queued"] += 1
+                    elif "error" in status:
+                        counts["error"] += 1
+
                 if not cid or cid in failed_cids:
                     continue
-
-                peer_map = pin.get("peer_map", {})
 
                 # A CID is "in error" when ALL peers that have an opinion report error.
                 # Peers that are "queued" or "pinning" don't count against the CID yet.
@@ -185,10 +207,13 @@ def poll_loop():
                 else:
                     print(f"[tracker] {cid[:24]}… unpin failed, will retry next poll", flush=True)
 
-            if to_fail:
-                save_state()
-            elif error_counts:
-                save_state()  # keep counts persisted across restarts
+            summary.clear()
+            summary.update(counts)
+            summary["pin_count"] = len(pins)
+            summary["updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+            # Always persisted — /summary must stay useful across tracker restarts.
+            save_state()
 
         time.sleep(POLL_INTERVAL)
 
@@ -216,6 +241,13 @@ class Handler(BaseHTTPRequestHandler):
                     "poll_interval":  POLL_INTERVAL,
                     "error_counts":   dict(error_counts),
                 }, indent=2).encode()
+            self._json(200, body)
+
+        elif self.path in ("/summary", "/summary/"):
+            # Cached aggregate pin-status counts — never triggers a live cluster
+            # broadcast. Computed once per poll cycle regardless of pinset size.
+            with state_lock:
+                body = json.dumps(dict(summary), indent=2).encode()
             self._json(200, body)
 
         elif self.path in ("/healthz", "/health"):
