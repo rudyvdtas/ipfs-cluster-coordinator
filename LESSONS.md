@@ -238,3 +238,20 @@ handmatig het juiste ID moet doorgeven.
 > De peer ID in `volunteer_cluster.md` is bewust publiek — deze is nodig om
 > te bootstrappen en vormt geen beveiligingsrisico zonder de bijbehorende
 > `CLUSTER_SECRET`.
+
+## Migratie weg van Coolify (okt 2026) — in uitvoering
+
+**Aanleiding:** VPS heeft maar 1.8GB RAM. `docker stats` liet zien dat Coolify's
+eigen beheerstack (sentinel + coolify + db + redis + realtime + proxy) ~424MB
+gebruikte — bijna evenveel als de hele cluster-workload (`cluster` + `ipfs`
+samen ~422MB). Gecombineerd met het ontbreken van memory-limits op alle
+containers en een ongecontroleerde rebalance van 3336 nieuwe CIDs is dit een
+belangrijke oorzaak van de VPS-crashes. Volledig plan: zie `TODO.md` in de
+workspace-root.
+
+**Branch:** `architecture-moving-away-from-coolify`
+
+**Fase 1 (lokaal voorbereid):** Caddyfile toegevoegd aan
+`sveltekit-monitor-app/Caddyfile` als vervanging voor Coolify's Traefik-proxy.
+Installatie van Caddy zelf (`apt install caddy`) en syntax-validatie moeten op
+de VPS zelf gebeuren — dat kan niet vanuit deze lokale werkomgeving.
