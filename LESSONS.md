@@ -281,3 +281,30 @@ draaien nu via plain `docker compose` vanuit `/opt/ipfs-cluster-coordinator` op 
   dashboard + tracker herstelden vanzelf na de korte cutover-downtime.
 - `coolify-proxy`, `coolify`, etc. draaien nog gewoon door — worden pas in
   Fase 5 verwijderd, na een stabiliteitsperiode.
+
+**Belangrijke ontdekking tijdens Fase 3/4 (bevestigt de oorspronkelijke crash-analyse):**
+De cluster REST API antwoordt op `/pins` met een **31MB JSON-respons** (3336+ CIDs,
+elk met peer-allocaties). Een los request duurt ~4-5s — niet erg. Maar tijdens het
+verifiëren vielen drie zware requests toevallig samen (eigen diagnose-commando's +
+de tracker's reguliere 60s-poll), en toen duurde één van die requests >35s en liep
+de monitor in een timeout (`CLUSTER_TIMEOUT_MS=30000`). Zodra de gelijktijdige
+requests voorbij waren, werkte alles weer meteen. **Dit bevestigt letterlijk de
+oorspronkelijke hypothese: meerdere gelijktijdige zware `/pins`-aanroepen (monitor +
+tracker + handmatige diagnose/rebalance) kunnen elkaar blokkeren en tijdelijk een
+"cluster unavailable"-beeld geven, zonder dat er iets kapot is.** Toekomstige fix-
+richting (niet nu uitgevoerd): gedeelde rate-limiting/caching tussen monitor én
+tracker, of een lichtere `/pins`-variant i.p.v. de volledige payload bij elke poll.
+
+**Fase 3 (afgerond, 3 okt 2026) — andere aanpak dan origineel gepland:** in plaats
+van Docker is gekozen voor **direct Node.js + systemd** voor de monitor (zie
+`sveltekit-monitor-app/LESSONS.md` voor de volledige redenering en stappen).
+Hiervoor was een extra wijziging nodig: de cluster REST API (`9094`) is nu ook
+gebonden aan `127.0.0.1` op de host (naast het interne `cluster-internal`
+Docker-netwerk), zodat een host-level proces er zonder Docker-DNS bij kan —
+nooit publiek, alleen loopback.
+
+**Fase 4 (afgerond, 3 okt 2026):** `coolify-proxy` gestopt, standalone Caddy
+gestart op 80/443. `https://glimmy.xyz` en `https://www.glimmy.xyz` geverifieerd
+met geldig Let's Encrypt-certificaat en echte clusterdata. Downtime tijdens de
+cutover: enkele minuten (de tijd tussen het stoppen van de oude dashboard-container
+en het live zetten van Caddy + de systemd-monitor).
