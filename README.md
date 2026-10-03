@@ -42,6 +42,13 @@ allocations and host content; only the coordinator controls the pinset.
 docker compose up -d
 ```
 
+Draait in productie op de VPS vanuit `/opt/ipfs-cluster-coordinator` via plain
+`docker compose` (niet via Coolify — zie `LESSONS.md`). Na elke `git pull`:
+
+```
+docker compose up -d
+```
+
 ## Get the peer address (for followers)
 
 ```
@@ -61,7 +68,7 @@ Note the peer ID from the output. The bootstrap multiaddr for follower peers is:
 | 4001 | TCP+UDP | Yes | IPFS swarm |
 | 8081 | TCP | Yes | IPFS gateway |
 | 9096 | TCP | Yes | Cluster gossip (followers connect here) |
-| 9094 | TCP | **No** | Cluster REST API (internal only, via `cluster-internal` network) |
+| 9094 | TCP | **No** | Cluster REST API — `cluster-internal` Docker network + `127.0.0.1` only (for the host-level monitor process, see `sveltekit-monitor-app`) |
 | 5001 | TCP | **No** | IPFS API (localhost only) |
 
 ## Architecture
