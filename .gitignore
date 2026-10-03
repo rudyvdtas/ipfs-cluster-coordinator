@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Host-specific compose overrides (e.g. volume-name remapping during migrations)
+docker-compose.override.yml
+
 # OS
 .DS_Store
 Thumbs.db

@@ -251,7 +251,33 @@ workspace-root.
 
 **Branch:** `architecture-moving-away-from-coolify`
 
-**Fase 1 (lokaal voorbereid):** Caddyfile toegevoegd aan
-`sveltekit-monitor-app/Caddyfile` als vervanging voor Coolify's Traefik-proxy.
-Installatie van Caddy zelf (`apt install caddy`) en syntax-validatie moeten op
-de VPS zelf gebeuren — dat kan niet vanuit deze lokale werkomgeving.
+**Fase 1 (afgerond, 3 okt 2026):** Caddy 2.11.7 geïnstalleerd op de VPS, gestopt +
+disabled na installatie (nooit actief geweest op 80/443, geen conflict met
+`coolify-proxy`). Caddyfile met het echte domein (`glimmy.xyz` / `www.glimmy.xyz`,
+ontdekt via `docker inspect` op de dashboard-labels) staat op `/etc/caddy/Caddyfile`
+en is gevalideerd ("Valid configuration"). Bijvangst: `coolify-proxy` is zelf al
+Caddy (caddy-docker-proxy labels), niet Traefik — de Traefik-labels in de
+monitor-compose zijn dode config.
+
+**Fase 2 (afgerond, 3 okt 2026):** `cluster` + `ipfs` losgekoppeld van Coolify,
+draaien nu via plain `docker compose` vanuit `/opt/ipfs-cluster-coordinator` op de VPS.
+
+- Ontdekt: er bestonden al **lege** volumes (`ipfs-cluster-coordinator_cluster_data`,
+  `ipfs-cluster-coordinator_ipfs_data`, aangemaakt 2 okt) van een eerdere losse
+  `docker compose up`-poging in dezelfde map — deze zijn bewust **niet** gebruikt
+  (geen `identity.json` erin, dus geen live data).
+- De echte, live data stond in Coolify's eigen volumes
+  (`koaxw04zgtze4rjo16frrlbc_cluster-data` / `_ipfs-data`, aangemaakt 18 sep).
+  Een `docker-compose.override.yml` (niet gecommit, host-specifiek, zie `.gitignore`)
+  koppelt de service-volumes expliciet aan die bestaande volumes via
+  `external: true` + `!override` merge-tag (nodig omdat de basis-`docker-compose.yaml`
+  `driver: local` specificeert, wat botst met `external` zonder de merge-tag).
+- `.env` aangemaakt met de echte productie-waarden (peername, secret, coordinator
+  peer-ID), rechtstreeks uitgelezen uit de draaiende Coolify-container, nooit
+  opnieuw in logs/output getoond.
+- Cutover: oude Coolify-containers gestopt (niet verwijderd, voor rollback) →
+  nieuwe stack gestart op dezelfde volumes. Geverifieerd: identieke cluster- en
+  IPFS-peer-ID, pinset intact, alle 4 vrijwilligers automatisch weer verbonden,
+  dashboard + tracker herstelden vanzelf na de korte cutover-downtime.
+- `coolify-proxy`, `coolify`, etc. draaien nog gewoon door — worden pas in
+  Fase 5 verwijderd, na een stabiliteitsperiode.
