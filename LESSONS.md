@@ -319,6 +319,28 @@ kwamen allebei automatisch terug, site direct bereikbaar met volledige clusterda
 **Resultaat:** beschikbaar geheugen 538Mi → 643Mi → **802Mi**, swap-gebruik
 215Mi → 332Mi → **107Mi**. Coolify-migratie hiermee volledig afgerond.
 
+### 18. Pinnen naar specifieke vrijwilligers met `--allocations`
+
+Het `ipfs-cluster-ctl pin add` commando ondersteunt `--allocations <peerID>,<peerID>`
+om CIDs naar één of meerdere specifieke peers te sturen i.p.v. de cluster zelf te
+laten verdelen. Dit is gebruikt voor KOv2 batch 2: 1922 CIDs, alleen op joera
+(`12D3KooWEwkft7CBFWzCmNngJRmw42PPQk7dRTaPheWZpV7UHD6g`) en vernis-artbox
+(`12D3KooWFnsoGcDhPyRu1vrvTyXzKXgXjBhcNAg3E5p5fVAsnE2o`), met
+`--replication-min 2 --replication-max 2` zodat elke CID op beide volunteers staat.
+De coordinator pinnt deze CIDs niet zelf — de allocatie is exclusief naar de
+twee vrijwilligers.
+
+Het script `scripts/pin-ko-v2-batch2.sh` voert de sync uit. Leest
+`curated-cids-ko-v2-batch2.json` (1922 CIDs) en roept `pin add` aan met
+`--allocations`. Bij herhaald draaien worden al gepinde CIDS overgeslagen.
+
+### 19. Schaalbaarheid van `--allocations` bij groei naar 3+ volunteers
+
+De batch is nu opgezet met replicatie 2 over 2 peers. Als er een 3e volunteer
+bijkomt, kan `--replication-max 3` worden gebruikt (of een `rebalance`) om
+de replicatiefactor te verhogen. Het `--allocations`-mechanisme kan worden
+uitgebreid met de nieuwe peer-ID zonder dat de coordinator zelf hoeft te pinnen.
+
 ## ✅ Opgelost — `/pins` schaalbaarheid (3 okt 2026)
 
 **Probleem (oorspronkelijk):** `GET /pins` (bulk) deed een synchrone broadcast naar alle
