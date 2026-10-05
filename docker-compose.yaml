@@ -39,6 +39,10 @@ services:
       - BOOTSTRAP_PEERS=${BOOTSTRAP_PEERS:-}
     ports:
       - "9096:9096"
+      # REST API: loopback-only, so a host-level process (e.g. the monitor
+      # running directly via systemd, not Docker) can reach it. Never bind
+      # 0.0.0.0 here — the REST API has no auth.
+      - "127.0.0.1:9094:9094"
     volumes:
       - cluster_data:/data/ipfs-cluster
       - ./scripts/patch-cluster-config.sh:/opt/patch-cluster-config.sh:ro

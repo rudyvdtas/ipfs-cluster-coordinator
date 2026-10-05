@@ -238,3 +238,134 @@ handmatig het juiste ID moet doorgeven.
 > De peer ID in `volunteer_cluster.md` is bewust publiek — deze is nodig om
 > te bootstrappen en vormt geen beveiligingsrisico zonder de bijbehorende
 > `CLUSTER_SECRET`.
+
+## Migratie weg van Coolify (okt 2026) — in uitvoering
+
+**Aanleiding:** VPS heeft maar 1.8GB RAM. `docker stats` liet zien dat Coolify's
+eigen beheerstack (sentinel + coolify + db + redis + realtime + proxy) ~424MB
+gebruikte — bijna evenveel als de hele cluster-workload (`cluster` + `ipfs`
+samen ~422MB). Gecombineerd met het ontbreken van memory-limits op alle
+containers en een ongecontroleerde rebalance van 3336 nieuwe CIDs is dit een
+belangrijke oorzaak van de VPS-crashes. Volledig plan: zie `TODO.md` in de
+workspace-root.
+
+**Branch:** `architecture-moving-away-from-coolify`
+
+**Fase 1 (afgerond, 3 okt 2026):** Caddy 2.11.7 geïnstalleerd op de VPS, gestopt +
+disabled na installatie (nooit actief geweest op 80/443, geen conflict met
+`coolify-proxy`). Caddyfile met het echte domein (`glimmy.xyz` / `www.glimmy.xyz`,
+ontdekt via `docker inspect` op de dashboard-labels) staat op `/etc/caddy/Caddyfile`
+en is gevalideerd ("Valid configuration"). Bijvangst: `coolify-proxy` is zelf al
+Caddy (caddy-docker-proxy labels), niet Traefik — de Traefik-labels in de
+monitor-compose zijn dode config.
+
+**Fase 2 (afgerond, 3 okt 2026):** `cluster` + `ipfs` losgekoppeld van Coolify,
+draaien nu via plain `docker compose` vanuit `/opt/ipfs-cluster-coordinator` op de VPS.
+
+- Ontdekt: er bestonden al **lege** volumes (`ipfs-cluster-coordinator_cluster_data`,
+  `ipfs-cluster-coordinator_ipfs_data`, aangemaakt 2 okt) van een eerdere losse
+  `docker compose up`-poging in dezelfde map — deze zijn bewust **niet** gebruikt
+  (geen `identity.json` erin, dus geen live data).
+- De echte, live data stond in Coolify's eigen volumes
+  (`koaxw04zgtze4rjo16frrlbc_cluster-data` / `_ipfs-data`, aangemaakt 18 sep).
+  Een `docker-compose.override.yml` (niet gecommit, host-specifiek, zie `.gitignore`)
+  koppelt de service-volumes expliciet aan die bestaande volumes via
+  `external: true` + `!override` merge-tag (nodig omdat de basis-`docker-compose.yaml`
+  `driver: local` specificeert, wat botst met `external` zonder de merge-tag).
+- `.env` aangemaakt met de echte productie-waarden (peername, secret, coordinator
+  peer-ID), rechtstreeks uitgelezen uit de draaiende Coolify-container, nooit
+  opnieuw in logs/output getoond.
+- Cutover: oude Coolify-containers gestopt (niet verwijderd, voor rollback) →
+  nieuwe stack gestart op dezelfde volumes. Geverifieerd: identieke cluster- en
+  IPFS-peer-ID, pinset intact, alle 4 vrijwilligers automatisch weer verbonden,
+  dashboard + tracker herstelden vanzelf na de korte cutover-downtime.
+- `coolify-proxy`, `coolify`, etc. draaien nog gewoon door — worden pas in
+  Fase 5 verwijderd, na een stabiliteitsperiode.
+
+**Belangrijke ontdekking tijdens Fase 3/4 (bevestigt de oorspronkelijke crash-analyse):**
+De cluster REST API antwoordt op `/pins` met een **31MB JSON-respons** (3336+ CIDs,
+elk met peer-allocaties). Een los request duurt ~4-5s — niet erg. Maar tijdens het
+verifiëren vielen drie zware requests toevallig samen (eigen diagnose-commando's +
+de tracker's reguliere 60s-poll), en toen duurde één van die requests >35s en liep
+de monitor in een timeout (`CLUSTER_TIMEOUT_MS=30000`). Zodra de gelijktijdige
+requests voorbij waren, werkte alles weer meteen. **Dit bevestigt letterlijk de
+oorspronkelijke hypothese: meerdere gelijktijdige zware `/pins`-aanroepen (monitor +
+tracker + handmatige diagnose/rebalance) kunnen elkaar blokkeren en tijdelijk een
+"cluster unavailable"-beeld geven, zonder dat er iets kapot is.** Toekomstige fix-
+richting (niet nu uitgevoerd): gedeelde rate-limiting/caching tussen monitor én
+tracker, of een lichtere `/pins`-variant i.p.v. de volledige payload bij elke poll.
+
+**Fase 3 (afgerond, 3 okt 2026) — andere aanpak dan origineel gepland:** in plaats
+van Docker is gekozen voor **direct Node.js + systemd** voor de monitor (zie
+`sveltekit-monitor-app/LESSONS.md` voor de volledige redenering en stappen).
+Hiervoor was een extra wijziging nodig: de cluster REST API (`9094`) is nu ook
+gebonden aan `127.0.0.1` op de host (naast het interne `cluster-internal`
+Docker-netwerk), zodat een host-level proces er zonder Docker-DNS bij kan —
+nooit publiek, alleen loopback.
+
+**Fase 4 (afgerond, 3 okt 2026):** `coolify-proxy` gestopt, standalone Caddy
+gestart op 80/443. `https://glimmy.xyz` en `https://www.glimmy.xyz` geverifieerd
+met geldig Let's Encrypt-certificaat en echte clusterdata. Downtime tijdens de
+cutover: enkele minuten (de tijd tussen het stoppen van de oude dashboard-container
+en het live zetten van Caddy + de systemd-monitor).
+
+**Fase 5 (afgerond, 3 okt 2026):** Coolify volledig verwijderd (containers, eigen
+volumes, `/data/coolify`) — vervroegd op expliciet verzoek, i.p.v. de geadviseerde
+24-48u stabiliteitsperiode. Health-checks waren groen vlak voor uitvoering.
+Geverifieerd met een echte VPS-reboot: `cluster`/`ipfs`/`tracker` (Docker
+`restart: unless-stopped`) en `caddy`/`sveltekit-monitor` (systemd `enabled`)
+kwamen allebei automatisch terug, site direct bereikbaar met volledige clusterdata.
+
+**Resultaat:** beschikbaar geheugen 538Mi → 643Mi → **802Mi**, swap-gebruik
+215Mi → 332Mi → **107Mi**. Coolify-migratie hiermee volledig afgerond.
+
+## ✅ Opgelost — `/pins` schaalbaarheid (3 okt 2026)
+
+**Probleem (oorspronkelijk):** `GET /pins` (bulk) deed een synchrone broadcast naar alle
+peers (`PinTracker.StatusAll`) en wachtte op alle antwoorden voordat de respons werd
+samengesteld. Bij 3336+ CIDs met meerdere externe peers duurde dat 4-30s+ met een
+payload van 22-38MB. Bij 200K CIDs zou dat 1-2GB per request worden.
+
+**Opgelost door:** de architectuur te splitsen in "overzicht" (cache, geen live broadcast)
+en "verificatie" (live per-CID lookup, schaalt met peer-count, niet met CID-aantal).
+
+### Wat er veranderd is
+
+| Component | Oude aanpak | Nieuwe aanpak |
+|-----------|-------------|---------------|
+| **Dashboard (homepage)** | `GET /pins` (bulk, 22-38MB) | Tracker `GET /summary` (cached) voor tellingen + `GET /allocations` voor recente CID-lijst |
+| **Volunteer pagina** | `GET /pins` alleen voor `pins.length` | `GET /allocations` (1.7MB, 0.13s, schaalt lineair) |
+| **Per-CID lookup** | Bestond niet | Nieuwe `getPinStatus(cid)` via `GET /pins/{cid}` (~16ms, schaalt met peers, niet met CIDs) |
+| **Projectenpagina** | Alle CIDs in één keer, geen live status | Paginering (default 50/page) + `getPinStatus` alleen voor de getoonde pagina |
+| **Tracker `/pins` poll** | Ongewijzigd (tracker heeft de data nog nodig voor error-detectie, 1× per 60s) | Ongewijzigd — is de enige overgebleven aanroeper van bulk-`/pins` |
+
+### Meetresultaten (voor/na)
+
+| Endpoint | Voor | Na |
+|----------|------|-----|
+| Dashboard laden | 4-30s, kon timeouten | ~0.2s (alle cache, geen broadcast) |
+| Per-CID lookup | ~16ms (was los, bleef goedkoop) | ~16ms (ongewijzigd) |
+| Pagina project CIDs tonen (50 stuks) | >30s met alle CIDs | ~0.2s voor lijst + 16ms × 50 parallel voor status |
+| Volunteer pagina | >5s (hele pinset binnenhalen voor 1 getal) | ~0.13s (`/allocations`, 1 getal) |
+
+### Verwijderde code
+- Bulk `getPins()` uit `cluster.ts` (vervangen door `getAllocations()` + `getSummary()`)
+- `MAX_PINS`/`MAX_PEER_ALLOCATIONS` guards (waren alleen relevant voor `getPins()`)
+- Alle tests die alleen de bulk-aanpak dekten
+
+### Nieuwe functies/endpoints
+
+| Functie | Endpoint | Cache |
+|---------|----------|-------|
+| `getPinStatus(cid)` | `GET /pins/{cid}` (geen `local`) | Per-CID, TTL 15s |
+| `getAllocations()` | `GET /allocations` | TTL 15s |
+| `getSummary()` | Tracker `GET /summary` (altijd cache) | Per poll-cycle |
+| Paginering projecten | Query params `?project=&page=&per_page=` | Geen cluster-call voor CID-lijst |
+
+### Resterende opmerking
+De tracker pollt nog steeds 1× per `POLL_INTERVAL_SECONDS` (default 60s) de
+bulk `GET /pins` voor error-detectie — dit is bewust, want de tracker heeft de
+volledige pinset nodig om per-CID error counts bij te houden. Dit is 1 verzoek per
+minuut, wat de cluster aankan. Als de pinset >500K groeit, kan overwogen worden om de
+tracker ook over te zetten op per-CID polling (alleen CIDs met een eerdere error
+monitoren), maar dat is nu nog niet nodig.
