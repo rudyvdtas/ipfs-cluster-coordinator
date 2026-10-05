@@ -20,19 +20,7 @@ PINNED=0
 SKIPPED=0
 ERRORS=0
 
-ALREADY_PINNED=$(${CLUSTER_CTL} --enc json pin ls 2>/dev/null | python3 -c "
-import sys, json
-raw = sys.stdin.read().strip()
-if not raw:
-    exit()
-data = json.loads(raw)
-if isinstance(data, list):
-    for d in data:
-        if 'cid' in d:
-            print(d['cid'])
-elif isinstance(data, dict) and 'cid' in data:
-    print(data['cid'])
-" 2>/dev/null || true)
+ALREADY_PINNED=$(${CLUSTER_CTL} pin ls 2>/dev/null | awk '{print $1}')
 
 TOTAL=$(python3 -c "import json; print(len(json.load(open('${CID_FILE}'))))")
 
