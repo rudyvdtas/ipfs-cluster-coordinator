@@ -319,38 +319,53 @@ kwamen allebei automatisch terug, site direct bereikbaar met volledige clusterda
 **Resultaat:** beschikbaar geheugen 538Mi → 643Mi → **802Mi**, swap-gebruik
 215Mi → 332Mi → **107Mi**. Coolify-migratie hiermee volledig afgerond.
 
-## ⚠️ Op te pakken NA volledige afronding van de Coolify-migratie: `/pins` schaalt niet
+## ✅ Opgelost — `/pins` schaalbaarheid (3 okt 2026)
 
-**Status: nog niet opgelost — bewust uitgesteld tot Fase 5-7 van de Coolify-migratie
-klaar zijn.** Dit is een apart, structureel probleem, losstaand van Coolify/Docker/
-systemd — het bestond al daarvoor en wordt alleen maar erger naarmate de pinset groeit.
+**Probleem (oorspronkelijk):** `GET /pins` (bulk) deed een synchrone broadcast naar alle
+peers (`PinTracker.StatusAll`) en wachtte op alle antwoorden voordat de respons werd
+samengesteld. Bij 3336+ CIDs met meerdere externe peers duurde dat 4-30s+ met een
+payload van 22-38MB. Bij 200K CIDs zou dat 1-2GB per request worden.
 
-**Bevinding (3 okt 2026, live gereproduceerd):** `GET /pins` doet géén lokale lookup,
-maar een **synchrone broadcast naar alle peers** (`PinTracker.StatusAll`) om van elke
-peer — inclusief externe vrijwilligers over het internet — de actuele pin-status op
-te halen, en wacht op alle antwoorden voor de respons wordt samengesteld. Met 3336+
-CIDs en meerdere (soms trage/NAT'te) externe peers duurt die ronde regelmatig langer
-dan de 30s-timeout van zowel de monitor als de tracker:
+**Opgelost door:** de architectuur te splitsen in "overzicht" (cache, geen live broadcast)
+en "verificatie" (live per-CID lookup, schaalt met peer-count, niet met CID-aantal).
 
-```
-ERROR cluster  PinTracker.StatusAll aborted: context canceled
-ERROR cluster  error in broadcast response from <peer-id>: context canceled
-ERROR restapi  sending error response: 500: context canceled
-```
+### Wat er veranderd is
 
-Gemeten: payload groeide van 31MB → 38MB binnen hetzelfde uur (pinset groeit nog
-steeds). Eén poging lukte in 21s, andere overschreden de 30s-timeout en kregen een
-HTTP 500. **Zowel de monitor als de tracker ondervinden dit onafhankelijk van elkaar**
-— dit is dus niet opgelost door de Coolify-migratie en zal bij een nog grotere pinset
-(richting de resterende CIDs die nog ge-upload moeten worden) alleen maar vaker
-voorkomen.
+| Component | Oude aanpak | Nieuwe aanpak |
+|-----------|-------------|---------------|
+| **Dashboard (homepage)** | `GET /pins` (bulk, 22-38MB) | Tracker `GET /summary` (cached) voor tellingen + `GET /allocations` voor recente CID-lijst |
+| **Volunteer pagina** | `GET /pins` alleen voor `pins.length` | `GET /allocations` (1.7MB, 0.13s, schaalt lineair) |
+| **Per-CID lookup** | Bestond niet | Nieuwe `getPinStatus(cid)` via `GET /pins/{cid}` (~16ms, schaalt met peers, niet met CIDs) |
+| **Projectenpagina** | Alle CIDs in één keer, geen live status | Paginering (default 50/page) + `getPinStatus` alleen voor de getoonde pagina |
+| **Tracker `/pins` poll** | Ongewijzigd (tracker heeft de data nog nodig voor error-detectie, 1× per 60s) | Ongewijzigd — is de enige overgebleven aanroeper van bulk-`/pins` |
 
-**Te onderzoeken zodra de Coolify-migratie (Fase 5-7) is afgerond:**
-- Bestaat er een `?local=true`-achtige query-parameter op `/pins` of `/pins/{cid}`
-  die de cluster-wide broadcast overslaat en alleen lokaal bekende status teruggeeft?
-- Kan de monitor/tracker volstaan met een lichtere endpoint (bv. alleen CID-lijst +
-  lokale status) in plaats van de volledige cross-peer statusronde bij elke poll?
-- Gedeelde rate-limiting/caching tussen monitor én tracker, zodat niet twee
-  onafhankelijke processen elk hun eigen volledige broadcast-ronde triggeren.
-- Eventueel de timeout verhogen als tijdelijke lapmiddel — lost de onderliggende
-  schaalbaarheid niet op, maar kan acute 500's verminderen.
+### Meetresultaten (voor/na)
+
+| Endpoint | Voor | Na |
+|----------|------|-----|
+| Dashboard laden | 4-30s, kon timeouten | ~0.2s (alle cache, geen broadcast) |
+| Per-CID lookup | ~16ms (was los, bleef goedkoop) | ~16ms (ongewijzigd) |
+| Pagina project CIDs tonen (50 stuks) | >30s met alle CIDs | ~0.2s voor lijst + 16ms × 50 parallel voor status |
+| Volunteer pagina | >5s (hele pinset binnenhalen voor 1 getal) | ~0.13s (`/allocations`, 1 getal) |
+
+### Verwijderde code
+- Bulk `getPins()` uit `cluster.ts` (vervangen door `getAllocations()` + `getSummary()`)
+- `MAX_PINS`/`MAX_PEER_ALLOCATIONS` guards (waren alleen relevant voor `getPins()`)
+- Alle tests die alleen de bulk-aanpak dekten
+
+### Nieuwe functies/endpoints
+
+| Functie | Endpoint | Cache |
+|---------|----------|-------|
+| `getPinStatus(cid)` | `GET /pins/{cid}` (geen `local`) | Per-CID, TTL 15s |
+| `getAllocations()` | `GET /allocations` | TTL 15s |
+| `getSummary()` | Tracker `GET /summary` (altijd cache) | Per poll-cycle |
+| Paginering projecten | Query params `?project=&page=&per_page=` | Geen cluster-call voor CID-lijst |
+
+### Resterende opmerking
+De tracker pollt nog steeds 1× per `POLL_INTERVAL_SECONDS` (default 60s) de
+bulk `GET /pins` voor error-detectie — dit is bewust, want de tracker heeft de
+volledige pinset nodig om per-CID error counts bij te houden. Dit is 1 verzoek per
+minuut, wat de cluster aankan. Als de pinset >500K groeit, kan overwogen worden om de
+tracker ook over te zetten op per-CID polling (alleen CIDs met een eerdere error
+monitoren), maar dat is nu nog niet nodig.

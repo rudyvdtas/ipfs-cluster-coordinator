@@ -1,0 +1,30 @@
+{
+  "notes": "Bewerk de storage_max per peer (in bytes). 'null' = onbekend/onbeperkt.",
+  "peers": {
+    "DRL Cluster": {
+      "peer_id": "12D3KooWMRpaSMLHj3aoJqfxDMErRfu64HeHbwTttUynofsuBbzd",
+      "storage_max": 86000000000,
+      "notes": "Coordinator VPS — 86GB vrij"
+    },
+    "joera": {
+      "peer_id": "12D3KooWEwkft7CBFWzCmNngJRmw42PPQk7dRTaPheWZpV7UHD6g",
+      "storage_max": 2000000000000,
+      "notes": "2TB"
+    },
+    "wighawag-pin-01": {
+      "peer_id": "12D3KooW9rSuvLrsPYHJc8QTriwY4bk8su6RxUZnqDk144uQpiiC",
+      "storage_max": 25000000000,
+      "notes": "25GB — zeer beperkt"
+    },
+    "vernis-artbox": {
+      "peer_id": "12D3KooWFnsoGcDhPyRu1vrvTyXzKXgXjBhcNAg3E5p5fVAsnE2o",
+      "storage_max": 100000000000,
+      "notes": "100GB"
+    },
+    "zomi": {
+      "peer_id": "12D3KooWJinwFX9Cjud73WjAmeh2g4JR789jPR2wKaYHzoSwaQLC",
+      "storage_max": null,
+      "notes": "Onbekend — treat as unlimited"
+    }
+  }
+}
