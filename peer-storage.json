@@ -25,6 +25,12 @@
       "peer_id": "12D3KooWJinwFX9Cjud73WjAmeh2g4JR789jPR2wKaYHzoSwaQLC",
       "storage_max": null,
       "notes": "Onbekend — treat as unlimited"
+    },
+    "raspberry-pi-volunteer": {
+      "peer_id": "12D3KooWSJPpqQqUpLCTMN91QnpjpXSQPx9ps2kYoJ9cF86Ah3mE",
+      "ipfs_peer_id": "12D3KooWKzEeMwnESn5RutV2nEVACxhLgTn6e5HXjLR9NHAx5a4R",
+      "storage_max": 1000000000000,
+      "notes": "Raspberry Pi — 1 TB SSD"
     }
   }
 }
