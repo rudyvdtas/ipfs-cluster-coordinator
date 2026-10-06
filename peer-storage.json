@@ -6,11 +6,7 @@
       "storage_max": 86000000000,
       "notes": "Coordinator VPS — 86GB vrij"
     },
-    "joera": {
-      "peer_id": "12D3KooWEwkft7CBFWzCmNngJRmw42PPQk7dRTaPheWZpV7UHD6g",
-      "storage_max": 2000000000000,
-      "notes": "2TB"
-    },
+    
     "wighawag-pin-01": {
       "peer_id": "12D3KooW9rSuvLrsPYHJc8QTriwY4bk8su6RxUZnqDk144uQpiiC",
       "storage_max": 25000000000,
@@ -26,11 +22,11 @@
       "storage_max": null,
       "notes": "Onbekend — treat as unlimited"
     },
-    "raspberry-pi-volunteer": {
+    "rudeberry-pi": {
       "peer_id": "12D3KooWSJPpqQqUpLCTMN91QnpjpXSQPx9ps2kYoJ9cF86Ah3mE",
       "ipfs_peer_id": "12D3KooWKzEeMwnESn5RutV2nEVACxhLgTn6e5HXjLR9NHAx5a4R",
-      "storage_max": 1000000000000,
-      "notes": "Raspberry Pi — 1 TB SSD"
+      "storage_max": 800000000000,
+      "notes": "Raspberry Pi — 800GB"
     }
   }
 }
