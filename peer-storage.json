@@ -19,8 +19,8 @@
     },
     "zomi": {
       "peer_id": "12D3KooWJinwFX9Cjud73WjAmeh2g4JR789jPR2wKaYHzoSwaQLC",
-      "storage_max": null,
-      "notes": "Onbekend — treat as unlimited"
+      "storage_max": 2000000000000,
+      "notes": "2TB"
     },
     "rudeberry-pi": {
       "peer_id": "12D3KooWSJPpqQqUpLCTMN91QnpjpXSQPx9ps2kYoJ9cF86Ah3mE",
