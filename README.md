@@ -21,14 +21,6 @@ This means the cluster allocator decides where to place each CID based on curren
 
 This is the active workflow for all new batch uploads.
 
-## Monitoring
-
-```bash
-./scripts/monitor-cluster.sh
-```
-
-See `docs/MONITORING.md` for cluster health checks.
-
 ## Documentation
 
 - `docs/ARCHITECTURE.md` — current cluster architecture and allocation model
@@ -38,16 +30,7 @@ See `docs/MONITORING.md` for cluster health checks.
 - `docs/volunteers/SYSTEMD_SETUP.md` — systemd alternative for existing Kubo
 - `docs/volunteers/ARTBOX_SETUP.md` — ArtBox-specific setup with separate Kubo
 
-## Data layout
-
-```text
-data/
-├── batches/
-├── projects/
-└── reference/
-```
-
 ## Notes
 
-- Legacy batch scripts are intentionally deprecated and blocked in this branch.
-- The runtime stack itself remains separate from the repository cleanup work and is intentionally not rewritten in-place.
+- Volunteer documentation is consolidated under `docs/volunteers/`. Root-level volunteer guides have been removed.
+- See `LESSONS.md` for operational history, deployment architecture, and production runbooks.
