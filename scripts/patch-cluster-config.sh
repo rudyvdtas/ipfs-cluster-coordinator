@@ -43,7 +43,7 @@ if command -v jq >/dev/null 2>&1; then
   echo "Configuring trusted_peers and pin_only_on_trusted_peers via jq..."
   jq --arg pid "$COORDINATOR_PEER_ID" '
     .consensus.crdt.trusted_peers = [$pid] |
-    .cluster.pin_only_on_trusted_peers = true
+    .cluster.pin_only_on_trusted_peers = false
   ' "$SERVICE_FILE" > "${SERVICE_FILE}.tmp" && mv "${SERVICE_FILE}.tmp" "$SERVICE_FILE"
 elif command -v python3 >/dev/null 2>&1; then
   echo "Configuring trusted_peers and pin_only_on_trusted_peers via python3..."
@@ -52,7 +52,7 @@ import json, sys
 with open('$SERVICE_FILE') as f:
     cfg = json.load(f)
 cfg.setdefault('consensus', {}).setdefault('crdt', {})['trusted_peers'] = ['$COORDINATOR_PEER_ID']
-cfg.setdefault('cluster', {})['pin_only_on_trusted_peers'] = True
+cfg.setdefault('cluster', {})['pin_only_on_trusted_peers'] = False
 with open('$SERVICE_FILE', 'w') as f:
     json.dump(cfg, f, indent=2)
 "
@@ -70,8 +70,8 @@ else
     in_consensus && /}/ && !/"crdt"/ && !/"consensus"/ { in_consensus=0; if(!trusted_done) print "  },\n  \"crdt\": {\n    \"trusted_peers\": [\"" pid "\"]\n  }"; print; next }
     
     /"cluster"/ { cluster_done=1; print; next }
-    cluster_done && /"pin_only"/ { print "    \"pin_only_on_trusted_peers\": true"; pinonly_done=1; next }
-    cluster_done && /}/ && !pinonly_done { print "    \"pin_only_on_trusted_peers\": true"; pinonly_done=1; print; next }
+    cluster_done && /"pin_only"/ { print "    \"pin_only_on_trusted_peers\": false"; pinonly_done=1; next }
+    cluster_done && /}/ && !pinonly_done { print "    \"pin_only_on_trusted_peers\": false"; pinonly_done=1; print; next }
     cluster_done && !/^[{}]/ { print; next }
     
     { print }
@@ -84,7 +84,7 @@ if command -v jq >/dev/null 2>&1; then
 fi
 
 echo "trusted_peers configured to [${COORDINATOR_PEER_ID}]"
-echo "pin_only_on_trusted_peers set to true"
+echo "pin_only_on_trusted_peers set to false"
 
 chown ipfs "$SERVICE"
 echo "cluster config patched."
