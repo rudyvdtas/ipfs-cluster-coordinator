@@ -46,6 +46,8 @@ services:
     volumes:
       - cluster_data:/data/ipfs-cluster
       - ./scripts/patch-cluster-config.sh:/opt/patch-cluster-config.sh:ro
+      - ./scripts/cluster-entrypoint.sh:/opt/cluster-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/opt/cluster-entrypoint.sh"]
     networks:
       default: {}
       cluster-internal:
