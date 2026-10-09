@@ -1,0 +1,30 @@
+# Docker Compose override example
+
+This file is an example override for host-specific runtime tweaks.
+
+It is intentionally not committed as the live production override file.
+
+Copy it to `docker-compose.override.yml` on a specific host when needed.
+
+```yaml
+services:
+  ipfs:
+    volumes:
+      - ipfs_data:/data/ipfs
+
+  cluster:
+    volumes:
+      - cluster_data:/data/ipfs-cluster
+    ports:
+      - "127.0.0.1:9094:9094"
+
+volumes:
+  ipfs_data:
+  cluster_data:
+```
+
+## Notes
+
+- Keep host-specific volume mappings and environment differences outside Git.
+- Use this file only for local or deployment-specific overrides.
+- Do not use this as a replacement for the production compose file.
