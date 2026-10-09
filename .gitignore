@@ -23,11 +23,11 @@ Thumbsdb.db
 *.crt
 service.json
 
-# Data
-data/
-
-# Old batch scripts (deprecated)
+# Legacy batch scripts (deprecated; intentionally blocked)
 scripts/sync-cids.sh
 scripts/rebalance.sh
 scripts/rebalance-batch.sh
 scripts/pin-ko-v2-*.sh
+
+# Do not ignore the structured data directory anymore
+# data/
