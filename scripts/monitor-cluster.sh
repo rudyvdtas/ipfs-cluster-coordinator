@@ -21,11 +21,11 @@ ${CLUSTER_CTL} status 2>/dev/null | grep "> " | awk '{print $NF}' | sort | uniq 
 done
 
 printf "\n💾 Storage summary:\n"
-if [ -f "data/reference/peer-storage.json" ]; then
+if [ -f "peer-storage.json" ]; then
   python3 - <<'PY'
 import json
 
-with open('data/reference/peer-storage.json') as f:
+with open('peer-storage.json') as f:
     cfg = json.load(f)
 
 for name, info in cfg['peers'].items():
@@ -37,5 +37,5 @@ for name, info in cfg['peers'].items():
     print(f"   {name:20s} {label:>6s}")
 PY
 else
-  echo "   no peer-storage.json found in data/reference/"
+  echo "   no peer-storage.json found"
 fi
