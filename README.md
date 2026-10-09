@@ -2,128 +2,117 @@
 
 Docker Compose deployment for the IPFS Cluster seed/coordinator peer.
 
-## Prerequisites
+## Quick Start
 
-Create the shared Docker network once on the host:
+### Coordinator setup
 
-```
+```bash
+git clone https://github.com/rudyvdtas/ipfs-cluster-coordinator.git
+cd ipfs-cluster-coordinator
+cp .env.example .env
+# Edit .env: fill in CLUSTER_SECRET, COORDINATOR_PEER_ID
 docker network create cluster-internal
+docker compose up -d
 ```
 
-## Environment variables
+Verify:
+```bash
+docker exec cluster ipfs-cluster-ctl id
+```
+
+### For volunteers
+
+See [`docs/volunteers/GETTING_STARTED.md`](docs/volunteers/GETTING_STARTED.md).
+
+## Default Allocation Model
+
+All new batches use **storage-aware replication** (min 2, max 3):
+
+- Large peers (2 TB) get more pins than small peers (25 GB)
+- Peers with no free space keep existing pins but receive no new ones
+- The cluster allocator decides placement automatically
+- No hardcoded peer exceptions in the standard workflow
+
+## Pinning a Batch
+
+```bash
+./scripts/pin-batch.sh data/batches/week42.json
+```
+
+See [`docs/PINNING_WORKFLOW.md`](docs/PINNING_WORKFLOW.md) for details.
+
+## Monitor Cluster Health
+
+```bash
+./scripts/monitor-cluster.sh
+```
+
+See [`docs/MONITORING.md`](docs/MONITORING.md) for details.
+
+## Architecture
+
+```
+┌──────────────────────────────┐
+│   cluster-internal network   │
+│   (Docker network)           │
+│                              │
+│  cluster:9094 (REST API)     │
+│  tracker:9095 (sidecar)      │
+└──────────────────────────────┘
+```
+
+### Components
+
+| Component | Purpose | Port |
+|-----------|---------|------|
+| Kubo | IPFS node | 4001 (public), 5001 (local) |
+| Cluster | IPFS Cluster daemon | 9096 (public), 9094 (local) |
+| Tracker | Failed-CID monitoring | 9095 (local) |
+
+### Network
+
+| Port | Protocol | Public | Purpose |
+|------|----------|--------|----------|
+| 4001 | TCP+UDP | Yes | IPFS swarm |
+| 8081 | TCP | Yes | IPFS gateway |
+| 9096 | TCP | Yes | Cluster gossip (for volunteers) |
+| 9094 | TCP | **No** | Cluster REST API (internal only) |
+| 9095 | TCP | **No** | Tracker REST API (localhost only) |
+| 5001 | TCP | **No** | IPFS API (localhost only) |
+
+## Environment Variables
 
 Copy `.env.example` to `.env` and fill in:
 
 | Variable | Description |
 |----------|-------------|
-| `CLUSTER_SECRET` | 256-bit hex secret shared across all peers. Generate: `od -vN 32 -An -tx1 /dev/urandom \| tr -d ' \n'` |
-| `COORDINATOR_PEER_ID` | Peer ID of this coordinator. Used by `CLUSTER_CRDT_TRUSTEDPEERS` and to patch `trusted_peers` + `pin_only_on_trusted_peers` in `service.json`, so only this peer controls the pinset. Get it with `docker exec cluster ipfs-cluster-ctl id` |
+| `CLUSTER_SECRET` | 256-bit hex secret shared across all peers |
+| `COORDINATOR_PEER_ID` | Peer ID of this coordinator |
 | `CLUSTER_PEERNAME` | Human-readable name for this peer |
-| `BOOTSTRAP_PEERS` | Empty for the seed peer. For followers: `/ip4/<seed-ip>/tcp/9096/p2p/<seed-peer-id>` |
-| `IPFS_STORAGE_MAX` | Kubo storage ceiling, e.g. `4TB`, `500GB`. Default: `4TB`. |
-| `POLL_INTERVAL_SECONDS` | Tracker poll interval (see tracker section below). Default: `60`. |
+| `BOOTSTRAP_PEERS` | Empty for coordinator; for volunteers: `/ip4/<ip>/tcp/9096/p2p/<peer-id>` |
+| `IPFS_STORAGE_MAX` | Kubo storage ceiling, e.g. `4TB`, `500GB` |
+| `POLL_INTERVAL_SECONDS` | Tracker poll interval (default: 60) |
 
-Set `CLUSTER_SECRET` and `COORDINATOR_PEER_ID` via secrets management
-(not in the compose file).
+See [`.env.example`](.env.example) for more details.
 
-## Roles
+## Tracker (Failed-CID Monitoring)
 
-| | Coordinator | Volunteer peer |
-|---|---|---|
-| Modify pinset (add/remove CIDs) | ✅ | ❌ |
-| Store allocated content | ✅ | ✅ |
-| Join the cluster | ✅ | ✅ |
+A sidecar service monitors the cluster for failed pins:
 
-The cluster distributes pin allocations automatically across peers via
-`replication_factor_min` / `replication_factor_max`. Volunteers receive
-allocations and host content; only the coordinator controls the pinset.
-
-## Deploy
-
-```
-docker compose up -d
-```
-
-Draait in productie op de VPS vanuit `/opt/ipfs-cluster-coordinator` via plain
-`docker compose` (niet via Coolify — zie `LESSONS.md`). Na elke `git pull`:
-
-```
-docker compose up -d
-```
-
-## Tracker (failed-CID sidecar)
-
-Naast de cluster draait een tracker-service (`track-failed-cids.py`) in een
-aparte Docker container. Deze:
-
-- Pollt elke `POLL_INTERVAL_SECONDS` de cluster REST API (`GET /pins`) voor
-  pin-status
-- Houdt per-CID error counts bij; na `MAX_RETRIES` errors wordt de CID
-  automatisch ge-unpind en aan de failed-lijst toegevoegd
-- Biedt `GET /summary` aan (cached, geen live broadcast) — gebruikt door de
-  monitor voor tellingen
-
-Start de tracker met:
-
-```
+```bash
 docker compose -f docker-compose.tracker.yml up -d
 ```
 
-### Tracker endpoints
+Endpoints:
+- `GET /summary` → pin counts (pinned/pinning/error/queued)
+- `GET /failed-cids` → list of failed CIDs
+- `DELETE /failed-cids/{cid}` → retry a failed CID
 
-| Endpoint | Beschrijving |
-|----------|--------------|
-| `GET /failed-cids` | JSON array van gefaalde CIDs |
-| `GET /summary` | Cached aggregate pin-status counts |
-| `GET /status` | Debug: error_counts + failed_count |
-| `GET /healthz` | `{"status": "ok"}` |
-| `DELETE /failed-cids/{cid}` | Verwijder van failed lijst (manual retry) |
+## Documentation
 
-## Get the peer address (for followers)
-
-```
-docker exec cluster ipfs-cluster-ctl id
-```
-
-Note the peer ID from the output. The bootstrap multiaddr for follower peers is:
-
-```
-/ip4/<this-machine-public-ip>/tcp/9096/p2p/<peer-id>
-```
-
-## Network
-
-| Port | Protocol | Public | Purpose |
-|------|----------|--------|---------|
-| 4001 | TCP+UDP | Yes | IPFS swarm |
-| 8081 | TCP | Yes | IPFS gateway |
-| 9096 | TCP | Yes | Cluster gossip (followers connect here) |
-| 9094 | TCP | **No** | Cluster REST API — `cluster-internal` Docker network + `127.0.0.1` only (for the host-level monitor process, see `sveltekit-monitor-app`) |
-| 9095 | TCP | **No** | Tracker REST API (localhost only) |
-| 5001 | TCP | **No** | IPFS API (localhost only) |
-
-## Architecture
-
-```
-                    ┌──────────────────────────┐
-                    │   cluster-internal net   │
-                    │   (docker network)       │
-                    │                          │
-                    │  cluster:9094            │
-                    │  (REST API, no host port)│
-                    └──────────┬───────────────┘
-                               │
-                               │ HTTP
-                               │
-                    ┌──────────▼───────────────┐
-                    │  sveltekit-monitor-app   │
-                    │  (separate repo)         │
-                    └──────────────────────────┘
-
-                    ┌──────────────────────────┐
-                    │  tracker:9095            │
-                    │  (failed-CID sidecar)    │
-                    │  Polls cluster:9094      │
-                    │  Exposes /summary        │
-                    └──────────────────────────┘
-```
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Current cluster setup
+- [`docs/PINNING_WORKFLOW.md`](docs/PINNING_WORKFLOW.md) — How to add batches
+- [`docs/MONITORING.md`](docs/MONITORING.md) — Monitoring cluster health
+- [`docs/volunteers/GETTING_STARTED.md`](docs/volunteers/GETTING_STARTED.md) — Volunteer setup (Docker)
+- [`docs/volunteers/SYSTEMD_SETUP.md`](docs/volunteers/SYSTEMD_SETUP.md) — Alternative: systemd on existing Kubo
+- [`docs/volunteers/ARTBOX_SETUP.md`](docs/volunteers/ARTBOX_SETUP.md) — Special case: ArtBox with separate Kubo
