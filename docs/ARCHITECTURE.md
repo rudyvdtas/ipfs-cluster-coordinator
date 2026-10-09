@@ -1,55 +1,35 @@
 # Architecture
 
-This document describes the current production architecture as it is implemented in the coordinator repository, without changing the live runtime configuration.
-
-## Cluster role
-
-The cluster is a coordination and pinning system for volunteers and the coordinator peer.
-
-- Coordinator: the authoritative pinset owner
-- Volunteers: join the cluster and host allocated content
-- The coordinator controls pinset changes
-- Volunteers do not add or remove pins directly
+This document captures the current intended architecture for the cleanup branch.
 
 ## Allocation model
 
-The production default is storage-aware allocation, not hardcoded peer assignments.
+The default model is:
 
-The cluster allocates new pins based on free space reported by peers.
+- min replication = 2
+- max replication = 3
+- allocation is storage-aware
+a peer with more free space receives more new pins
+- peers with no free space keep existing pins but do not receive new ones
 
-This means:
-- a 2 TB peer gets more pins than a 25 GB peer
-- a peer with no free space keeps existing pins but does not receive new ones
-- if there are too few peers with capacity, the pin may fail instead of being under-replicated
+This is the standard model for all normal volume uploads.
 
-This is the intended default for new batches.
+## Volunteer treatment
 
-## Production defaults
+All volunteers are treated equally in the default workflow.
 
-- replication min: 2
-- replication max: 3
-- batch pinning: storage-aware, cluster allocator decides placement
-- no hardcoded peer exceptions in the normal workflow
+- no hardcoded peer exceptions
+- no special-case batch assignment in the default path
+- large peers naturally receive more content than small peers because the allocator ranks peers by free space
 
-## Runtime components
+## Operational components
 
-- `docker-compose.yaml`: the active runtime stack
-- `track-failed-cids.py`: tracker sidecar for failed-CID monitoring
-- `docker-compose.tracker.yml`: tracker service config
-- `scripts/patch-cluster-config.sh`: service.json patching for boot-time config fixes
+- coordinator: active cluster owner
+- volunteers: join and host allocated content
+- tracker: monitors failed CIDs
+- batch workflow: `scripts/pin-batch.sh`
+- monitor: `scripts/monitor-cluster.sh`
 
-## Important notes
+## Important note
 
-- The runtime stack should remain stable until the production fix set is intentionally applied.
-- The generic batch workflow in this branch is intentionally additive and does not replace the current live runtime files.
-- This branch is for clean-up, documentation, and a standard batch workflow only.
-
-## Source of truth for pinning
-
-The current runtime still depends on the live cluster state plus the CID JSON files used by the operational scripts.
-
-For the cleanup and standardization effort, the intended default is:
-
-- one batch script for all JSON collections
-- one storage-aware workflow for all volunteers
-- no hardcoded peer-specific pinning in normal operations
+This branch documents the intended, standard behavior. It is not a rewrite of the live runtime configuration.

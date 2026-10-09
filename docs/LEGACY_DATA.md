@@ -1,11 +1,15 @@
-# Legacy root files remain temporarily for operational reference.
+# Legacy data notes
 
-This branch formalizes the intended organization, but it does not remove the root files in one go.
+This branch intentionally keeps a clean separation between:
 
-Standard structure:
+- active workflow files
+- historical or legacy files
+- data files used for reference
 
-- `data/batches/`
-- `data/projects/`
-- `data/reference/`
+The main cleanup principle is:
 
-The root files can be cleaned up in a later migration step once the data mapping is confirmed.
+- standard workflow = `scripts/pin-batch.sh`
+- legacy batch scripts are deprecated and intentionally blocked
+- root-level raw data is organized under `data/`
+
+This is a documentation branch, not a runtime rewrite branch.
