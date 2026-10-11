@@ -8,7 +8,7 @@ docker-compose.override.yml
 
 # OS
 .DS_Store
-Thumbsdb.db
+Thumbs.db
 
 # Editor
 .vscode/
@@ -26,5 +26,11 @@ readme_info.md
 *.key
 *.crt
 service.json
+
+# Interne config & runtime
+peer-storage.json
+.kilo/
+tracker-data/
+data/peers/
 
 
