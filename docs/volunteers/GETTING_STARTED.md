@@ -20,16 +20,20 @@ cp .env.example .env
 
 Then fill in the required values in `.env`:
 
-- `CLUSTER_SECRET`
-- `CLUSTER_PEERNAME`
-- `COORDINATOR_PEER_ID`
-- `BOOTSTRAP_PEERS`
-- `IPFS_STORAGE_MAX`
+- `CLUSTER_SECRET` — shared cluster secret (zelfde op alle peers, verkrijg via de coordinator)
+- `CLUSTER_PEERNAME` — unieke naam voor jouw node, bijv. `mijn-pi-thuis`
+- `COORDINATOR_PEER_ID` — peer ID van de coordinator (zie `volunteer_cluster.md` of vraag op)
+- `BOOTSTRAP_PEERS` — multiaddr van de coordinator om te joinen
+- `IPFS_STORAGE_MAX` — hoeveel ruimte je wil vrijmaken voor IPFS-data (bv. `100GB`)
 
 Then:
 
 ```bash
 docker network create cluster-internal
+# Dit gedeelde netwerk is nodig omdat de cluster container de REST API
+# beschikbaar maakt voor andere containers (zoals de monitor/tracker) via
+# dit netwerk. De docker-compose.yaml gebruikt een external network met
+# de naam 'cluster-internal' — zonder aanmaken start de container niet.
 docker compose up -d
 ```
 

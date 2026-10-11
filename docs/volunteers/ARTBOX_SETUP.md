@@ -157,7 +157,6 @@ sudo -u ipfs bash -c '
 
   sed -i "s|\"secret\".*|\"secret\": \"${CLUSTER_SECRET}\",|" service.json
   sed -i "s|\"peername\".*|\"peername\": \"${CLUSTER_PEERNAME}\",|" service.json
-  sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
   sed -i "s|/ip4/127.0.0.1/tcp/5001|/ip4/127.0.0.1/tcp/5002|" service.json
   sed -i "s|\"trusted_peers\".*|\"trusted_peers\": [\"${COORDINATOR_PEER_ID}\"],|" service.json
   sed -i "s|\"pin_only_on_trusted_peers\".*|\"pin_only_on_trusted_peers\": true,|" service.json

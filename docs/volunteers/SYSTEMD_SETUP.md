@@ -53,7 +53,6 @@ sed -i "s|\"secret\".*|\"secret\": \"$CLUSTER_SECRET\",|" service.json
 sed -i "s|\"peername\".*|\"peername\": \"$CLUSTER_PEERNAME\",|" service.json
 sed -i "s|\"trusted_peers\".*|\"trusted_peers\": [\"$COORDINATOR_PEER_ID\"],|" service.json
 sed -i "s|\"pin_only_on_trusted_peers\".*|\"pin_only_on_trusted_peers\": true,|" service.json
-sed -i "s|/ip4/127.0.0.1/tcp/9094|/ip4/127.0.0.1/tcp/9094/http|" service.json
 sed -i "s|\"bootstrap\".*|\"bootstrap\": [\"/ip4/$COORDINATOR_IP/tcp/9096/p2p/$COORDINATOR_PEER_ID\"],|" service.json
 ```
 
