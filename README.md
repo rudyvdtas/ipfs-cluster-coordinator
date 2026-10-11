@@ -23,12 +23,20 @@ This is the active workflow for all new batch uploads.
 
 ## Documentation
 
-- `docs/ARCHITECTURE.md` — current cluster architecture and allocation model
-- `docs/PINNING_WORKFLOW.md` — batch workflow and replication defaults
-- `docs/MONITORING.md` — monitoring commands and health checks
-- `docs/volunteers/GETTING_STARTED.md` — standard volunteer setup
-- `docs/volunteers/SYSTEMD_SETUP.md` — systemd alternative for existing Kubo
-- `docs/volunteers/ARTBOX_SETUP.md` — ArtBox-specific setup with separate Kubo
+| Pad | Omschrijving |
+|-----|-------------|
+| `docs/ARCHITECTURE.md` | Cluster architectuur en allocatiemodel |
+| `docs/PINNING_WORKFLOW.md` | Batch workflow en replicatie-defaults |
+| `docs/MONITORING.md` | Monitoring commands en health checks |
+| `docs/DATA_ORGANIZATION.md` | Uitleg over de `data/` directorystructuur |
+| `docs/IPv6_BOOTSTRAP_SETUP.md` | IPv6 bootstrapping voor peers |
+| `docs/NAT_TROUBLESHOOTING.md` | NAT/asymmetrische connectiviteit |
+| `docs/STORAGE_SCENARIOS.md` | Opslag-scenarios en rekenformules |
+| `docs/LEGACY_DATA.md` | Legacy data — migratie |
+| `docs/LEGACY_SCRIPTS.md` | Legacy scripts — referentie |
+| `docs/volunteers/GETTING_STARTED.md` | Standaard volunteer setup (Docker) |
+| `docs/volunteers/SYSTEMD_SETUP.md` | Systemd-alternatief voor bestaande Kubo |
+| `docs/volunteers/ARTBOX_SETUP.md` | ArtBox-specifieke setup met aparte Kubo |
 
 ## Notes
 
