@@ -17,6 +17,10 @@ Thumbsdb.db
 # Logs
 *.log
 
+# Opslag/beheer — publieke repo, niet delen
+LESSONS.md
+readme_info.md
+
 # Credentials & keys
 *.pem
 *.key
