@@ -4,7 +4,7 @@
 set -e
 
 CLUSTER_CTL="docker exec cluster ipfs-cluster-ctl"
-CID_FILE="$(cd "$(dirname "$0")" && pwd)/../curated-cids-ko-v2-batch2.json"
+CID_FILE="$(cd "$(dirname "$0")" && pwd)/../data/batches/curated-cids-ko-v2-batch2.json"
 
 if [ ! -f "$CID_FILE" ]; then
   echo "ERROR: $CID_FILE not found"

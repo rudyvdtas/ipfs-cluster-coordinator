@@ -28,7 +28,6 @@ readme_info.md
 service.json
 
 # Interne config & runtime
-peer-storage.json
 .kilo/
 tracker-data/
 data/peers/
