@@ -7,6 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile.tracker
     restart: unless-stopped
+    mem_limit: 128M
     environment:
       # Cluster REST API — binnen het Docker network bereikbaar als http://cluster:9094
       CLUSTER_API: "http://cluster:9094"
@@ -22,9 +23,9 @@ services:
       # State persisteren zodat je na een restart niet opnieuw begint te tellen
       - tracker-data:/data
     ports:
-      # Alleen nodig als je de tracker ook van buitenaf wil bereiken
-      # De monitor kan hem ook intern bereiken via http://tracker:9095
-      - "9095:9095"
+      # Loopback-only — de monitor (systemd op host) bereikt de tracker via
+      # 127.0.0.1:9095. Nooit publiek, de tracker API heeft geen auth.
+      - "127.0.0.1:9095:9095"
     depends_on:
       - cluster
     networks:
