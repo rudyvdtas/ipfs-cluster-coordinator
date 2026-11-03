@@ -35,6 +35,8 @@ BATCH_SIZE=${BATCH_SIZE:-100}
 PAUSE_SECONDS=${PAUSE_SECONDS:-15}
 BATCH_DIR=${BATCH_DIR:-data/batches}
 DRY_RUN=${DRY_RUN:-0}
+FAIL_LOG=${FAIL_LOG:-/tmp/ipfs-cluster-pin-failures.tsv}
+ABORT_AFTER_FAILS=${ABORT_AFTER_FAILS:-20}
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -117,17 +119,24 @@ for i in $(seq "$START_BATCH" "$END_BATCH"); do
     [ -z "$cid" ] && continue
     i=$((i + 1))
     if [ -n "$ALLOCATIONS" ]; then
-      $CLUSTER_CTL pin add "$cid" --allocations "$ALLOCATIONS" >/dev/null 2>&1
+      out=$($CLUSTER_CTL pin add "$cid" --allocations "$ALLOCATIONS" 2>&1)
       rc=$?
     else
-      $CLUSTER_CTL pin add "$cid" --replication-min "$REPL_MIN" --replication-max "$REPL_MAX" >/dev/null 2>&1
+      out=$($CLUSTER_CTL pin add "$cid" --replication-min "$REPL_MIN" --replication-max "$REPL_MAX" 2>&1)
       rc=$?
     fi
     if [ "$rc" -eq 0 ]; then
       ok=$((ok + 1))
     else
       bad=$((bad + 1))
-      echo "  FAIL $cid"
+      msg=$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)
+      echo "  FAIL $cid :: $msg"
+      printf '%s\t%s\n' "$cid" "$msg" >> "$FAIL_LOG"
+    fi
+    if [ "$bad" -ge "$ABORT_AFTER_FAILS" ] && [ "$ok" -eq 0 ]; then
+      echo "!! aborting batch $n: first ${bad} pins all failed, see ${FAIL_LOG}"
+      failed_batches+=("$n(all-failed)")
+      break
     fi
     if [ $((i % BATCH_SIZE)) -eq 0 ] && [ "$i" -lt "$todo" ]; then
       echo "  ${i}/${todo} (ok=${ok} fail=${bad}) - pause ${PAUSE_SECONDS}s"
