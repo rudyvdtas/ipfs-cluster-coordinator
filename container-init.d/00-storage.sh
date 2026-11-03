@@ -1,10 +1,10 @@
 #!/bin/sh
 set -e
 
-# Raise Kubo's storage ceiling. Default is ~10GB; with cluster peers
-# hosting large allocations they need a much higher limit.
-# Override via the IPFS_STORAGE_MAX environment variable (e.g. 4TB).
-MAX="${IPFS_STORAGE_MAX:-4TB}"
+# Set Kubo's storage ceiling. The default is sized for the coordinator, which
+# must not host content: peers that only coordinate get 5GB. Volunteers MUST
+# set IPFS_STORAGE_MAX explicitly (e.g. 200GB) or they will stall at 5GB.
+MAX="${IPFS_STORAGE_MAX:-5GB}"
 
 echo "Setting Datastore.StorageMax to ${MAX}"
 ipfs config Datastore.StorageMax "${MAX}" || exit 1
