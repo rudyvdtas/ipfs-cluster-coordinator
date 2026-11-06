@@ -3,10 +3,11 @@ services:
     image: ipfs/kubo:latest
     container_name: ipfs
     restart: unless-stopped
-    mem_limit: 256M
+    mem_limit: 4G
+    memswap_limit: 4G
     environment:
       - IPFS_PROFILE=server
-      - IPFS_STORAGE_MAX=${IPFS_STORAGE_MAX:-5GB}
+      - IPFS_STORAGE_MAX=${IPFS_STORAGE_MAX:-40GB}
     ports:
       - "4001:4001"
       - "4001:4001/udp"
@@ -26,7 +27,8 @@ services:
     image: ipfs/ipfs-cluster:latest
     container_name: cluster
     restart: unless-stopped
-    mem_limit: 512M
+    mem_limit: 4G
+    mem_reservation: 512M
     depends_on:
       ipfs:
         condition: service_healthy
