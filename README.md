@@ -59,32 +59,23 @@ Rules:
   reach git and a later pull will not apply them;
 - `.env` exists only in the live directory and is never committed.
 
-### Consolidating a split layout
+### Current setup (since 6 nov 2026)
 
-If the live directory turns out not to be the git clone:
+The stack lives in `/opt/ipfs-cluster-coordinator`, which is the git working copy
+at `main`. Deploy workflow:
 
 ```bash
-# 1. back up the live directory first
-tar czf /root/ipfs-cluster-coordinator.bak-$(date +%F).tgz -C /root ipfs-cluster-coordinator
-
-# 2. see what differs before overwriting anything
-diff /root/ipfs-cluster-coordinator/docker-compose.yaml /opt/ipfs-cluster-coordinator/docker-compose.yaml
-
-# 3. copy repo content in, keeping .env and the live compose file
-rsync -av --exclude '.git/' --exclude '.env' --exclude 'docker-compose.yaml' \
-  /opt/ipfs-cluster-coordinator/ /root/ipfs-cluster-coordinator/
-
-# 4. make the live directory the working copy
-cp -a /opt/ipfs-cluster-coordinator/.git /root/ipfs-cluster-coordinator/.git
-
-# 5. verify: no unexpected modifications, nothing behind origin
-cd /root/ipfs-cluster-coordinator
-git status --short
-bash scripts/check-deploy-drift.sh
+# On the VPS, in the live directory:
+cd /opt/ipfs-cluster-coordinator
+git pull --ff-only origin main
+bash scripts/check-deploy-drift.sh          # exit 0 required
+docker compose up -d
 ```
 
-After that, `/opt` can be removed (or kept as a read-only backup). Do this while
-no pin job is running.
+Only `.env` is host-local and never committed. All changes go through
+GitHub (feature branch → PR → merge → `git pull` on the VPS).
+
+Raw KOv3 batch source data lives in `/srv/ipfs-data/raw-kov3/` (outside the repo).
 
 ## Notes
 
